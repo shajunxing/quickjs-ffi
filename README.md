@@ -22,12 +22,12 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-* [https://bellard.org/quickjs/]
-* [https://github.com/bellard/quickjs]
-* [https://sourceware.org/libffi/]
-* [https://github.com/libffi/libffi]
+* <https://bellard.org/quickjs/>
+* <https://github.com/bellard/quickjs>
+* <https://sourceware.org/libffi/>
+* <https://github.com/libffi/libffi>
 
-Although there's already one wrapper [https://github.com/partnernetsoftware/qjs-ffi] I've found through duckduckgo, to be honest I'm not satisfied with this principle. My opinion is better to keep C code simple and stupid, and put complex logic into JS. Existing library functions, variables, macro definitions and all the things exposed should keep their original look as much as possible.
+Although there's already one wrapper <https://github.com/partnernetsoftware/qjs-ffi> I've found through duckduckgo, to be honest I'm not satisfied with this principle. My opinion is better to keep C code simple and stupid, and put complex logic into JS. Existing library functions, variables, macro definitions and all the things exposed should keep their original look as much as possible.
 
 So I wrote my own from scratch. My module has two layers, low layer is `quickjs-ffi.c`, compiled to `quickjs-ffi.so`, containing minimal necessarily things from libc, libdl, libffi, and using it is almost the same as it was in C, high layer is pure JS code, not necessary, only makes low layer easy to use.
 
