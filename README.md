@@ -27,13 +27,13 @@ SOFTWARE.
 * <https://sourceware.org/libffi/>
 * <https://github.com/libffi/libffi>
 
-Although there's already one wrapper <https://github.com/partnernetsoftware/qjs-ffi> I've found through duckduckgo, to be honest I'm not satisfied with this principle. My opinion is better to keep C code simple and stupid, and put complex logic into JS. Existing library functions, variables, macro definitions and all the things exposed should keep their original look as much as possible.
+Although there's already one wrapper <https://github.com/partnernetsoftware/qjs-ffi> I found through duckduckgo, to be honest I'm not satisfied with this principle. My opinion is better to keep C code simple and stupid, and put complex logic into JS. Existing library functions, variables, macro definitions and all the things exposed should keep their original look as much as possible.
 
-So I wrote my own from scratch. My module has two layers, low layer is `quickjs-ffi.c`, compiled to `quickjs-ffi.so`, containing minimal necessarily things from libc, libdl, libffi, and using it is almost the same as it was in C, high layer is pure JS code, not necessary, only makes low layer easy to use.
+So I wrote my own from scratch. My module has two layers, low layer is `quickjs-ffi.c`, compiled to `quickjs-ffi.so`, containing minimal necessary things from libc, libdl, libffi, and using it is almost the same as it was in C, high layer is pure JS code, not necessary, only makes low layer easy to use.
 
 ## Low layer
 
-I's quite east to compile, just `make`, it will generate module lib `quickjs-ffi.so`, test lib `test-lib.so` and will run `test.js`.
+I's quite east to compile, just `make`, it will produce module `quickjs-ffi.so`, test lib `test-lib.so` and will run `test.js`.
 
 This is an example of importing this module and print all it's members:
 
@@ -43,15 +43,13 @@ This is an example of importing this module and print all it's members:
         console.log(k, '=', ffi[k].toString());
     }
 
-Any C number types such as `int`, `float`, are all `number` in JS.
+Some rules:
 
-All C pointer types are actually `uintptr_t` in C, and `number` in JS, the value are exactly memory addresses.
-
-C `char *` string may be `string` in JS.
-
-JS `bool` is C `bool`, in C99 there are `bool` definitions although they are actually integers.
-
-C function with no return value, returns `undefined` in JS.
+* Any C number types such as `int`, `float`, are all `number` in JS.
+* All C pointer types are actually `uintptr_t` in C, and `number` in JS, the value are exactly memory addresses.
+* C `char *` string may be `string` in JS.
+* JS `bool` is C `bool`, in C99 there are `bool` definitions although they are actually integers.
+* C functions which have no return value, will return `undefined` in JS.
 
 The module exposes many constant variables, which varies by C or machine implementation or different compiling, it's necessary. For example: C int size varies, which byte size can be obtained by `sizeof_int` member. Any `sizeof_xxx` member is actually value of `sizeof(xxx)`.
 
@@ -59,11 +57,11 @@ I will do my best checking arguments, including their count and types, although 
 
 Also I will check out-of-bound error in many memory handling functions, yet still not enough, so do it at your own risk.
 
-C needs lots of memory operations, so I exposed necessary libc functions such as `malloc`, `free`, `memset` and `memcpy`, and I expanded my own functions below:
+C needs lots of memory operations, so I exposed necessary libc functions such as `malloc`, `free`, `memset` and `memcpy`, and added my own functions below:
 
 * `undefined fprinthex(pointer stream, pointer data, number size)` print a memory block like `hexdump -C` format.
 * `undefined printhex(pointer data, number size)` print to stdout.
-* `number memreadint(pointer buf, number buflen, number offset, bool issigned, number bytewidth)` read certain width integer from `offset` of `buf`, `buflen` is for oob checking, `bytewidth` can only be 1, 2, 4 or 8.
+* `number memreadint(pointer buf, number buflen, number offset, bool issigned, number bytewidth)` read specified width integer from `offset` of `buf`, `buflen` is for oob checking, `bytewidth` can only be 1, 2, 4 or 8.
 * `undefined memwriteint(pointer buf, number buflen, number offset, number bytewidth, number val)` write integer `val` to `offset`, signed/unsigned is not necessary to speciy.
 * `number memreadfloat(pointer buf, number buflen, number offset, bool isdouble)` read float/double from `offset`, in C float is always 4 bytes and double is 8.
 * `undefined memwritefloat(pointer buf, number buflen, number offset, bool isdouble, double val)` write float/double `val` to `offset`.
@@ -98,7 +96,7 @@ Here is an example:
     console.log(ffi.memreadfloat(buf, buflen, 0, true));
     ffi.free(buf);
 
-Functions in libdl and libffi are just the same as it was:
+Functions in `libdl` and `libffi` are almost the same as it's C style:
 
 * `pointer dlopen(string/null filename, number flags)`
 * `number dlclose(pointer handle)`
@@ -106,7 +104,12 @@ Functions in libdl and libffi are just the same as it was:
 * `number ffi_prep_cif(pointer cif, number abi, number nargs, pointer rtype, pointer atypes )`
 * `undefined ffi_call (pointer cif, pointer fn, pointer rvalue, pointer avalues)`
 
-And many necessary constant values or addresses such as `RTLD_XXX` `FFI_XXX` `ffi_type_xxx` ...
+And many necessary constant values or addresses such as `RTLD_XXX` `FFI_XXX` `ffi_type_xxx` are exposed.
+
+Cautions:
+
+* Since there is no way to define C numeric variables in JS, only dynamic creation using `malloc` is reasonable, so don't forget to `free` it when no longer use it.
+* `ffi_type_xxx` are pointers, eg. memory addresses.
 
 Here is a simple example invoking `void test1()` in `test-lib.so`:
 
