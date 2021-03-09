@@ -13,12 +13,20 @@ So I write my own from scratch. My module has two layers, low and high. Low laye
 
 I's very simple to compile, just "make", and will generate module lib quickjs-ffi.so, test lib test-lib.so and will run test.js.
 
-Below is a sample of how to use this module and print all members of it.
+This is a sample of how to use this module and print all members of it.
 
     import * as ffi from './quickjs-ffi.so'
 
     for (let k in ffi) {
         console.log(k, '=', ffi[k].toString());
     }
+
+All C pointer types are actually uintptr_t in C, and number in JS, the value are exactly memory addresses.
+
+The module exposes many constant variables, which varies by C or machine implementation or different compiling, it's necessary. For example: C int size varies, it's byte size can be obtained by "sizeof_int" member. Any "sizeof_xxx" member is actually value of sizeof(xxx).
+
+C needs lots of memory operations, so I exposed necessary libc functions such as malloc, free, memset and memcpy, and my own functions below:
+
+* `void fprinthex(FILE *stream, void *data, size_t size)`
 
 ## High layer, under construction
