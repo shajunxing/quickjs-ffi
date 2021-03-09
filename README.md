@@ -1,4 +1,4 @@
-# Libffi wrapper, Make QuickJS easy to invoke almost any C libraries without writing C code
+# Libffi wrapper, Make QuickJS able to invoke almost any C libraries without writing C code
 
 MIT License
 
@@ -47,11 +47,11 @@ Some rules:
 
 * Any C number types such as `int`, `float`, are all `number` in JS.
 * All C pointer types are actually `uintptr_t` in C, and `number` in JS, the value are exactly memory addresses.
-* C `char *` string may be `string` in JS.
+* C `char *` string can be `string` in JS.
 * JS `bool` is C `bool`, in C99 there are `bool` definitions although they are actually integers.
 * C functions which have no return value, will return `undefined` in JS.
 
-The module exposes many constant variables, which varies by C or machine implementation or different compiling, it's necessary. For example: C int size varies, which byte size can be obtained by `sizeof_int` member. Any `sizeof_xxx` member is actually value of `sizeof(xxx)`.
+The module exposes many constant variables, which varies by C or machine implementation or different compiling, it's necessary. For example: C int size varies, which byte size can be obtained by `sizeof_int` module member. Any `sizeof_xxx` is actually value of `sizeof(xxx)`.
 
 I will do my best checking arguments, including their count and types, although I know it's not enough.
 
@@ -108,7 +108,7 @@ And many necessary constant values or addresses such as `RTLD_XXX` `FFI_XXX` `ff
 
 Cautions:
 
-* Since there is no way to define C numeric variables in JS, only dynamic creation using `malloc` is reasonable, so don't forget to `free` it when no longer use it.
+* Since there is no way to define C numeric variables in JS, only dynamic creation using `malloc` is reasonable, so don't forget to `free` them when no longer use.
 * `ffi_type_xxx` are pointers, eg. memory addresses.
 
 Here is a simple example invoking `void test1()` in `test-lib.so`:
@@ -123,7 +123,7 @@ Here is a simple example invoking `void test1()` in `test-lib.so`:
     ffi.free(cif);
     console.log(ffi.dlclose(handle));
 
-Here is a slightly complex example invoking `double test2(float a, double b, const char *c)` in `test-lib.so`:
+And here is a slightly complex example invoking `double test2(float a, double b, const char *c)`:
 
     let handle = ffi.dlopen('test-lib.so', ffi.RTLD_NOW);
     if (handle != ffi.NULL) {
