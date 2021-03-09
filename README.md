@@ -1,19 +1,41 @@
 # Libffi wrapper, Make QuickJS easy to invoke almost any C libraries without writing C code
 
+MIT License
+
+Copyright (c) 2021 shajunxing
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
 * [https://bellard.org/quickjs/]
 * [https://github.com/bellard/quickjs]
 * [https://sourceware.org/libffi/]
 * [https://github.com/libffi/libffi]
 
-Although there's already one wrapper [https://github.com/partnernetsoftware/qjs-ffi] I've found through duckduckgo, to be honest I'm not satisfied with it's principle. My opinion is better keep C code simple and stupid. Existed library functions, variables, macro definitions and all the things exposed into JS should keep their original look like as much as possible.
+Although there's already one wrapper [https://github.com/partnernetsoftware/qjs-ffi] I've found through duckduckgo, to be honest I'm not satisfied with this principle. My opinion is better to keep C code simple and stupid, and put complex logic into JS. Existing library functions, variables, macro definitions and all the things exposed should keep their original look as much as possible.
 
-So I wrote my own from scratch. My module has two layers, low layer is `quickjs-ffi.c`, compiled to `quickjs-ffi.so`, containing minimal necessarily things from libc, libdl, libffi, and using it is almost the same as it was, high layer is pure JS code, not necessary, only makes low layer easy to use.
+So I wrote my own from scratch. My module has two layers, low layer is `quickjs-ffi.c`, compiled to `quickjs-ffi.so`, containing minimal necessarily things from libc, libdl, libffi, and using it is almost the same as it was in C, high layer is pure JS code, not necessary, only makes low layer easy to use.
 
 ## Low layer
 
-I's very simple to compile, just `make`, and will generate module lib `quickjs-ffi.so`, test lib `test-lib.so` and will run `test.js`.
+I's quite east to compile, just `make`, it will generate module lib `quickjs-ffi.so`, test lib `test-lib.so` and will run `test.js`.
 
-This is a sample of how to use this module and print all members of it.
+This is an example of importing this module and print all it's members:
 
     import * as ffi from './quickjs-ffi.so'
 
@@ -25,17 +47,17 @@ Any C number types such as `int`, `float`, are all `number` in JS.
 
 All C pointer types are actually `uintptr_t` in C, and `number` in JS, the value are exactly memory addresses.
 
-But C `char *` string may be `string` in JS.
+C `char *` string may be `string` in JS.
 
 JS `bool` is C `bool`, in C99 there are `bool` definitions although they are actually integers.
 
 C function with no return value, returns `undefined` in JS.
 
-The module exposes many constant variables, which varies by C or machine implementation or different compiling, it's necessary. For example: C int size varies, it's byte size can be obtained by `sizeof_int` member. Any `sizeof_xxx` member is actually value of `sizeof(xxx)`.
+The module exposes many constant variables, which varies by C or machine implementation or different compiling, it's necessary. For example: C int size varies, which byte size can be obtained by `sizeof_int` member. Any `sizeof_xxx` member is actually value of `sizeof(xxx)`.
 
-I will do my best checking argument count and types, although it's not enough.
+I will do my best checking arguments, including their count and types, although I know it's not enough.
 
-Also I will check out-of-bound error in many memory handling functions, yet still not enough, do it at your own risk.
+Also I will check out-of-bound error in many memory handling functions, yet still not enough, so do it at your own risk.
 
 C needs lots of memory operations, so I exposed necessary libc functions such as `malloc`, `free`, `memset` and `memcpy`, and I expanded my own functions below:
 
