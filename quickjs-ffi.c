@@ -34,15 +34,13 @@ SOFTWARE.
 #include <stdlib.h>
 #include <string.h>
 
-#define C_MACRO_INT32_DEF(x) JS_PROP_INT32_DEF(#x, (int32_t)(x), JS_PROP_CONFIGURABLE)
-#define C_MACRO_INT64_DEF(x) JS_PROP_INT64_DEF(#x, (int64_t)(x), JS_PROP_CONFIGURABLE)
 #define C_MACRO_STRING_DEF(x) JS_PROP_STRING_DEF(#x, x, JS_PROP_CONFIGURABLE)
 
 #if UINTPTR_MAX == UINT32_MAX
 #define JS_TO_UINTPTR_T(ctx, pres, val) JS_ToInt32(ctx, (int32_t *)(pres), val)
 #define JS_NEW_UINTPTR_T(ctx, val) JS_NewInt32(ctx, (int32_t)(val))
 #define C_MACRO_UINTPTR_T_DEF(x) JS_PROP_INT32_DEF(#x, (int32_t)(x), JS_PROP_CONFIGURABLE)
-// 不能#define C_MACRO_INTPTR_DEF(x) C_MACRO_INT32_DEF(x)否则#会展开为x所定义的内容而非x本身
+// 不能#define C_MACRO_INTPTR_DEF(x) C_MACRO_INT_DEF(x)否则#会展开为x所定义的内容而非x本身
 #define C_VAR_ADDRESS_DEF(x) JS_PROP_INT32_DEF(#x, (int32_t)(&x), JS_PROP_CONFIGURABLE)
 #elif UINTPTR_MAX == UINT64_MAX
 #define JS_TO_UINTPTR_T(ctx, pres, val) JS_ToInt64(ctx, (int64_t *)(pres), val)
@@ -69,10 +67,12 @@ SOFTWARE.
 #endif
 
 #if INT_MAX == INT32_MAX
+#define C_MACRO_INT_DEF(x) JS_PROP_INT32_DEF(#x, (int32_t)(x), JS_PROP_CONFIGURABLE)
 #define C_ENUM_DEF(x) JS_PROP_INT32_DEF(#x, (int32_t)(x), JS_PROP_CONFIGURABLE)
 #define JS_TO_INT(ctx, pres, val) JS_ToInt32(ctx, (int32_t *)(pres), val)
 #define JS_NEW_INT(ctx, val) JS_NewInt32(ctx, (int32_t)(val))
 #elif INT_MAX == INT64_MAX
+#define C_MACRO_INT_DEF(x) JS_PROP_INT64_DEF(#x, (int64_t)(x), JS_PROP_CONFIGURABLE)
 #define C_ENUM_DEF(x) JS_PROP_INT64_DEF(#x, (int64_t)(x), JS_PROP_CONFIGURABLE)
 #define JS_TO_INT(ctx, pres, val) JS_ToInt64(ctx, (int64_t *)(pres), val)
 #define JS_NEW_INT(ctx, val) JS_NewInt64(ctx, (int64_t)(val))
@@ -483,6 +483,7 @@ static JSCFunctionListEntry funcs[] = {
     C_MACRO_UINTPTR_T_DEF(NULL),
     C_SIZEOF_DEF(uintptr_t),
     C_SIZEOF_DEF(int),
+    C_SIZEOF_DEF(size_t),
     C_MACRO_STRING_DEF(LIBC_SO),
     C_MACRO_STRING_DEF(LIBM_SO),
     //
@@ -491,13 +492,13 @@ static JSCFunctionListEntry funcs[] = {
     JS_CFUNC_DEF("dlopen", 2, js_libdl_dlopen),
     JS_CFUNC_DEF("dlclose", 1, js_libdl_dlclose),
     JS_CFUNC_DEF("dlsym", 2, js_libdl_dlsym),
-    C_MACRO_INT32_DEF(RTLD_LAZY),
-    C_MACRO_INT32_DEF(RTLD_NOW),
-    C_MACRO_INT32_DEF(RTLD_GLOBAL),
-    C_MACRO_INT32_DEF(RTLD_LOCAL),
-    C_MACRO_INT32_DEF(RTLD_NODELETE),
-    C_MACRO_INT32_DEF(RTLD_NOLOAD),
-    C_MACRO_INT32_DEF(RTLD_DEEPBIND),
+    C_MACRO_INT_DEF(RTLD_LAZY),
+    C_MACRO_INT_DEF(RTLD_NOW),
+    C_MACRO_INT_DEF(RTLD_GLOBAL),
+    C_MACRO_INT_DEF(RTLD_LOCAL),
+    C_MACRO_INT_DEF(RTLD_NODELETE),
+    C_MACRO_INT_DEF(RTLD_NOLOAD),
+    C_MACRO_INT_DEF(RTLD_DEEPBIND),
 #if defined(_GNU_SOURCE)
     C_MACRO_UINTPTR_T_DEF(RTLD_DEFAULT),
     C_MACRO_UINTPTR_T_DEF(RTLD_NEXT),
@@ -540,6 +541,8 @@ static JSCFunctionListEntry funcs[] = {
     C_VAR_ADDRESS_DEF(ffi_type_sint),
     C_VAR_ADDRESS_DEF(ffi_type_ulong),
     C_VAR_ADDRESS_DEF(ffi_type_slong),
+    C_MACRO_INT_DEF(FFI_TYPE_STRUCT),
+    C_MACRO_INT_DEF(FFI_TYPE_COMPLEX),
 #endif
 };
 

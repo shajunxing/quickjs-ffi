@@ -1,5 +1,7 @@
 # Libffi wrapper, Make QuickJS able to invoke almost any C libraries without writing C code
 
+## License
+
 MIT License
 
 Copyright (c) 2021 shajunxing
@@ -21,6 +23,8 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## Intruduction
 
 * <https://bellard.org/quickjs/>
 * <https://github.com/bellard/quickjs>
@@ -168,6 +172,92 @@ And here is a slightly complex example invoking `double test2(float a, double b,
                 ffi.free(arg2);
                 ffi.free(arg1);
             }
+            ffi.free(atypes);
+            ffi.free(cif);
+        }
+        ffi.dlclose(handle);
+    }
+
+In libffi document there are detailed instructions on how to pass C structures. Here is an example. Two nested Structure definition and a function `test3()` to be called:
+
+    typedef struct {
+        int i;
+        float f;
+    } s1;
+
+    typedef struct {
+        long l;
+        double d;
+        s1 s;
+    } s2;
+
+    void test3(s2 s) {
+        ...
+    }
+
+JS code looks very similar to C, except almost all variables are dynamically created, so be very careful handling memories and pointers. I will make it easier in high layer.
+
+    let handle = ffi.dlopen('test-lib.so', ffi.RTLD_NOW);
+    if (handle != ffi.NULL) {
+        let test3 = ffi.dlsym(handle, 'test3');
+        if (test3 != ffi.NULL) {
+            let cif = ffi.malloc(ffi.sizeof_ffi_cif);
+            let atypes = ffi.malloc(ffi.sizeof_uintptr_t);
+
+            let s1_elements = ffi.malloc(ffi.sizeof_uintptr_t * 3);
+            ffi.memwriteint(s1_elements, ffi.sizeof_uintptr_t * 3, ffi.sizeof_uintptr_t * 0, ffi.sizeof_uintptr_t, ffi.ffi_type_sint);
+            ffi.memwriteint(s1_elements, ffi.sizeof_uintptr_t * 3, ffi.sizeof_uintptr_t * 1, ffi.sizeof_uintptr_t, ffi.ffi_type_float);
+            ffi.memwriteint(s1_elements, ffi.sizeof_uintptr_t * 3, ffi.sizeof_uintptr_t * 2, ffi.sizeof_uintptr_t, ffi.NULL);
+
+            let s1 = ffi.malloc(ffi.sizeof_ffi_type);
+            // I wrote C code, filled ffi_type members one by one with -1, and got it's structure is:
+            // "size" 8 bytes, "alignment" 2 bytes, "type" 2 bytes, useless blank 4 bytes, "**elements" 8 bytes
+            // I don't know why 4 bytes blank exists, C structure alignment rule?
+            ffi.memset(s1, 0, ffi.sizeof_size_t + 2);
+            ffi.memwriteint(s1, ffi.sizeof_ffi_type, ffi.sizeof_size_t + 2, 2, ffi.FFI_TYPE_STRUCT);
+            ffi.memwriteint(s1, ffi.sizeof_ffi_type, ffi.sizeof_size_t + 8, ffi.sizeof_uintptr_t, s1_elements);
+
+            let s2_elements = ffi.malloc(ffi.sizeof_uintptr_t * 4);
+            ffi.memwriteint(s2_elements, ffi.sizeof_uintptr_t * 4, ffi.sizeof_uintptr_t * 0, ffi.sizeof_uintptr_t, ffi.ffi_type_slong);
+            ffi.memwriteint(s2_elements, ffi.sizeof_uintptr_t * 4, ffi.sizeof_uintptr_t * 1, ffi.sizeof_uintptr_t, ffi.ffi_type_double);
+            ffi.memwriteint(s2_elements, ffi.sizeof_uintptr_t * 4, ffi.sizeof_uintptr_t * 2, ffi.sizeof_uintptr_t, s1);
+            ffi.memwriteint(s2_elements, ffi.sizeof_uintptr_t * 4, ffi.sizeof_uintptr_t * 3, ffi.sizeof_uintptr_t, ffi.NULL);
+
+            let s2 = ffi.malloc(ffi.sizeof_ffi_type);
+            ffi.memset(s2, 0, ffi.sizeof_size_t + 2);
+            ffi.memwriteint(s2, ffi.sizeof_ffi_type, ffi.sizeof_size_t + 2, 2, ffi.FFI_TYPE_STRUCT);
+            ffi.memwriteint(s2, ffi.sizeof_ffi_type, ffi.sizeof_size_t + 8, ffi.sizeof_uintptr_t, s2_elements);
+
+            ffi.printhex(s1, ffi.sizeof_ffi_type)
+            ffi.printhex(s2, ffi.sizeof_ffi_type)
+
+            ffi.memwriteint(atypes, ffi.sizeof_uintptr_t, 0, ffi.sizeof_uintptr_t, s2);
+
+            if (ffi.ffi_prep_cif(cif, ffi.FFI_DEFAULT_ABI, 1, ffi.ffi_type_void, atypes) == ffi.FFI_OK) {
+                let sizeof_struct_s2 = 24;
+                let arg1 = ffi.malloc(sizeof_struct_s2);
+                ffi.memwriteint(arg1, sizeof_struct_s2, 0, 8, 123456789);
+                ffi.memwritefloat(arg1, sizeof_struct_s2, 8, true, 3.141592654);
+                ffi.memwriteint(arg1, sizeof_struct_s2, 16, 4, 54321);
+                ffi.memwritefloat(arg1, sizeof_struct_s2, 20, false, 2.718281829);
+
+                let avalues_size = ffi.sizeof_uintptr_t;
+                let avalues = ffi.malloc(avalues_size);
+                ffi.memwriteint(avalues, avalues_size, 0, ffi.sizeof_uintptr_t, arg1);
+
+                ffi.ffi_call(cif, test3, ffi.NULL, avalues);
+
+                ffi.memset(arg1, 0xff, sizeof_struct_s2);
+                ffi.ffi_call(cif, test3, ffi.NULL, avalues);
+
+                ffi.free(avalues);
+                ffi.free(arg1);
+            }
+
+            ffi.free(s2);
+            ffi.free(s2_elements);
+            ffi.free(s1);
+            ffi.free(s1_elements);
             ffi.free(atypes);
             ffi.free(cif);
         }
