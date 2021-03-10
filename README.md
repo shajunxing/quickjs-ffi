@@ -57,7 +57,14 @@ I will do my best checking arguments, including their count and types, although 
 
 Also I will check out-of-bound error in many memory handling functions, yet still not enough, so do it at your own risk.
 
-C needs lots of memory operations, so I exposed necessary libc functions such as `malloc`, `free`, `memset` and `memcpy`, and added my own functions below:
+C needs lots of memory operations, so I exposed necessary libc functions such as `malloc`, `free`, `memset` and `memcpy`:
+
+* `pointer malloc(number size)`
+* `undefined free(pointer ptr)`
+* `pointer memset(pointer s, number c, number n)`
+* `pointer memcpy(pointer dest, pointer src, number n)`
+
+And added my own functions below:
 
 * `undefined fprinthex(pointer stream, pointer data, number size)` print a memory block like `hexdump -C` format.
 * `undefined printhex(pointer data, number size)` print to stdout.
