@@ -55,7 +55,7 @@ Some rules:
 * JS `bool` is C `bool`, in C99 there are `bool` definitions although they are actually integers.
 * C functions which have no return value, will return `undefined` in JS.
 
-The module exposes many constant variables, which varies by C or machine implementation or different compiling, it's necessary. For example: C int size varies, which byte size can be obtained by `sizeof_int` module member. Any `sizeof_xxx` is actually value of `sizeof(xxx)`.
+The module exposes many constant values, which varies by C or machine implementation or different compiling, it's necessary. For example: C int size varies, which byte size can be obtained by `sizeof_int` module member. Any `sizeof_xxx` is actually value of `sizeof(xxx)`. Also in order to properly handle structure members, I exposed some `offsetof_xxx_yyy` values which means `offsetof(xxx, yyy)` in C.
 
 I will do my best checking arguments, including their count and types, although I know it's not enough.
 
@@ -112,6 +112,7 @@ Functions in `libdl` and `libffi` are almost the same as it's C style:
 * `pointer dlopen(string/null filename, number flags)`
 * `number dlclose(pointer handle)`
 * `pointer dlsym(pointer handle, string symbol)`
+* `string/null dlerror()`
 * `number ffi_prep_cif(pointer cif, number abi, number nargs, pointer rtype, pointer atypes )`
 * `undefined ffi_call (pointer cif, pointer fn, pointer rvalue, pointer avalues)`
 
@@ -213,9 +214,10 @@ JS code looks very similar to C, except almost all variables are dynamically cre
             // I wrote C code, filled ffi_type members one by one with -1, and got it's structure is:
             // "size" 8 bytes, "alignment" 2 bytes, "type" 2 bytes, useless blank 4 bytes, "**elements" 8 bytes
             // I don't know why 4 bytes blank exists, C structure alignment rule?
-            ffi.memset(s1, 0, ffi.sizeof_size_t + 2);
-            ffi.memwriteint(s1, ffi.sizeof_ffi_type, ffi.sizeof_size_t + 2, 2, ffi.FFI_TYPE_STRUCT);
-            ffi.memwriteint(s1, ffi.sizeof_ffi_type, ffi.sizeof_size_t + 8, ffi.sizeof_uintptr_t, s1_elements);
+            // In order to solve this problem, I added some "offsetof_xxx" members.
+            ffi.memset(s1, 0, ffi.sizeof_ffi_type);
+            ffi.memwriteint(s1, ffi.sizeof_ffi_type, ffi.offsetof_ffi_type_type, 2, ffi.FFI_TYPE_STRUCT);
+            ffi.memwriteint(s1, ffi.sizeof_ffi_type, ffi.offsetof_ffi_type_elements, ffi.sizeof_uintptr_t, s1_elements);
 
             let s2_elements = ffi.malloc(ffi.sizeof_uintptr_t * 4);
             ffi.memwriteint(s2_elements, ffi.sizeof_uintptr_t * 4, ffi.sizeof_uintptr_t * 0, ffi.sizeof_uintptr_t, ffi.ffi_type_slong);
@@ -224,9 +226,9 @@ JS code looks very similar to C, except almost all variables are dynamically cre
             ffi.memwriteint(s2_elements, ffi.sizeof_uintptr_t * 4, ffi.sizeof_uintptr_t * 3, ffi.sizeof_uintptr_t, ffi.NULL);
 
             let s2 = ffi.malloc(ffi.sizeof_ffi_type);
-            ffi.memset(s2, 0, ffi.sizeof_size_t + 2);
-            ffi.memwriteint(s2, ffi.sizeof_ffi_type, ffi.sizeof_size_t + 2, 2, ffi.FFI_TYPE_STRUCT);
-            ffi.memwriteint(s2, ffi.sizeof_ffi_type, ffi.sizeof_size_t + 8, ffi.sizeof_uintptr_t, s2_elements);
+            ffi.memset(s2, 0, ffi.sizeof_ffi_type);
+            ffi.memwriteint(s2, ffi.sizeof_ffi_type, ffi.offsetof_ffi_type_type, 2, ffi.FFI_TYPE_STRUCT);
+            ffi.memwriteint(s2, ffi.sizeof_ffi_type, ffi.offsetof_ffi_type_elements, ffi.sizeof_uintptr_t, s2_elements);
 
             ffi.printhex(s1, ffi.sizeof_ffi_type)
             ffi.printhex(s2, ffi.sizeof_ffi_type)

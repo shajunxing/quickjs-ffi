@@ -33,6 +33,7 @@ SOFTWARE.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stddef.h>
 
 #define C_MACRO_STRING_DEF(x) JS_PROP_STRING_DEF(#x, x, JS_PROP_CONFIGURABLE)
 
@@ -62,6 +63,7 @@ SOFTWARE.
 #define JS_NEW_SIZE_T(ctx, val) JS_NewInt64(ctx, (int64_t)(val))
 #define JS_PROP_SIZE_T_DEF(name, val) JS_PROP_INT64_DEF(name, (int64_t)(val), JS_PROP_CONFIGURABLE)
 #define C_SIZEOF_DEF(x) JS_PROP_INT64_DEF(STR(sizeof_##x), (int64_t)(sizeof(x)), JS_PROP_CONFIGURABLE)
+#define C_OFFSETOF_DEF(t, d) JS_PROP_INT64_DEF(STR(offsetof_##t##_##d), (int64_t)(offsetof(t, d)), JS_PROP_CONFIGURABLE)
 #else
 #error "'size_t' neither 32bit nor 64 bit, I don't know how to handle it."
 #endif
@@ -433,6 +435,14 @@ static JSValue js_libdl_dlsym(JSContext *ctx, JSValueConst this_val, int argc, J
     return JS_NEW_UINTPTR_T(ctx, ret);
 }
 
+static JSValue js_libdl_dlerror(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    char *ret;
+
+    CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){}))
+    ret = dlerror();
+    return ret ? JS_NewString(ctx, ret) : JS_NULL;
+}
+
 static JSValue js_libffi_ffi_prep_cif(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     ffi_cif *cif;
     ffi_abi abi;
@@ -492,6 +502,7 @@ static JSCFunctionListEntry funcs[] = {
     JS_CFUNC_DEF("dlopen", 2, js_libdl_dlopen),
     JS_CFUNC_DEF("dlclose", 1, js_libdl_dlclose),
     JS_CFUNC_DEF("dlsym", 2, js_libdl_dlsym),
+    JS_CFUNC_DEF("dlerror", 0, js_libdl_dlerror),
     C_MACRO_INT_DEF(RTLD_LAZY),
     C_MACRO_INT_DEF(RTLD_NOW),
     C_MACRO_INT_DEF(RTLD_GLOBAL),
@@ -514,6 +525,10 @@ static JSCFunctionListEntry funcs[] = {
     C_SIZEOF_DEF(ffi_cif),
     C_ENUM_DEF(FFI_DEFAULT_ABI),
     C_SIZEOF_DEF(ffi_type),
+    C_OFFSETOF_DEF(ffi_type, size),
+    C_OFFSETOF_DEF(ffi_type, alignment),
+    C_OFFSETOF_DEF(ffi_type, type),
+    C_OFFSETOF_DEF(ffi_type, elements),
 #ifndef LIBFFI_HIDE_BASIC_TYPES
     C_VAR_ADDRESS_DEF(ffi_type_void),
     C_VAR_ADDRESS_DEF(ffi_type_uint8),
