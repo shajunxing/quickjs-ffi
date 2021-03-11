@@ -49,17 +49,15 @@ This is an example of importing this module and print all it's members:
 
 Some rules:
 
-* Any C number types such as `int`, `float`, are all `number` in JS.
+* Any C numeric types such as `int`, `float`, are all `number` in JS.
 * All C pointer types are actually `uintptr_t` in C, and `number` in JS, the value are exactly memory addresses.
 * C `char *` string can be `string` in JS.
 * JS `bool` is C `bool`, in C99 there are `bool` definitions although they are actually integers.
 * C functions which have no return value, will return `undefined` in JS.
 
-The module exposes many constant values, which varies by C or machine implementation or different compiling, it's necessary. For example: C int size varies, which byte size can be obtained by `sizeof_int` module member. Any `sizeof_xxx` is actually value of `sizeof(xxx)`. Also in order to properly handle structure members, I exposed some `offsetof_xxx_yyy` values which means `offsetof(xxx, yyy)` in C.
+The module exposes many constant values, which varies by C or machine implementation or different compilations, it's necessary. For example: C int size varies, so i exposed `sizeof_int`. Any `sizeof_xxx` is actually value of `sizeof(xxx)`. Also in order to properly operate structure members, I exposed some `offsetof_xxx_yyy` values which means `offsetof(xxx, yyy)` in C.
 
-I will do my best checking arguments, including their count and types, although I know it's not enough.
-
-Also I will check out-of-bound error in many memory handling functions, yet still not enough, so do it at your own risk.
+I will do my best checking function arguments, including their count and types, although I know it's not enough.
 
 C needs lots of memory operations, so I exposed necessary libc functions such as `malloc`, `free`, `memset` and `memcpy`:
 
@@ -68,16 +66,16 @@ C needs lots of memory operations, so I exposed necessary libc functions such as
 * `pointer memset(pointer s, number c, number n)`
 * `pointer memcpy(pointer dest, pointer src, number n)`
 
-And added my own functions below:
+And I added my own functions below. Also I will check out-of-bound error in them, yet still not enough, so do it at your own risk.
 
-* `undefined fprinthex(pointer stream, pointer data, number size)` print a memory block like `hexdump -C` format.
-* `undefined printhex(pointer data, number size)` print to stdout.
-* `number memreadint(pointer buf, number buflen, number offset, bool issigned, number bytewidth)` read specified width integer from `offset` of `buf`, `buflen` is for oob checking, `bytewidth` can only be 1, 2, 4 or 8.
-* `undefined memwriteint(pointer buf, number buflen, number offset, number bytewidth, number val)` write integer `val` to `offset`, signed/unsigned is not necessary to speciy.
-* `number memreadfloat(pointer buf, number buflen, number offset, bool isdouble)` read float/double from `offset`, in C float is always 4 bytes and double is 8.
-* `undefined memwritefloat(pointer buf, number buflen, number offset, bool isdouble, double val)` write float/double `val` to `offset`.
-* `string memreadstring(pointer buf, number buflen, number offset, number len)` read `len` bytes from `offset`, return JS string.
-* `string memwritestring(pointer buf, number buflen, number offset, number str)` write `str` to `offset`.
+* `undefined fprinthex(pointer stream, pointer data, number size)` <br>print a memory block like `hexdump -C` format.
+* `undefined printhex(pointer data, number size)` <br>print to stdout.
+* `number memreadint(pointer buf, number buflen, number offset, bool issigned, number bytewidth)` <br>read specified width integer from `offset` of `buf`, `buflen` is for oob checking, `bytewidth` can only be 1, 2, 4 or 8.
+* `undefined memwriteint(pointer buf, number buflen, number offset, number bytewidth, number val)` <br>write integer `val` to `offset`, signed/unsigned is not necessary to speciy.
+* `number memreadfloat(pointer buf, number buflen, number offset, bool isdouble)` <br>read float/double from `offset`, in C float is always 4 bytes and double is 8.
+* `undefined memwritefloat(pointer buf, number buflen, number offset, bool isdouble, double val)` <br>write float/double `val` to `offset`.
+* `string memreadstring(pointer buf, number buflen, number offset, number len)` <br>read `len` bytes from `offset`, return JS string.
+* `string memwritestring(pointer buf, number buflen, number offset, number str)` <br>write `str` to `offset`.
 
 Here is an example:
 
@@ -120,20 +118,18 @@ And many necessary constant values or addresses such as `RTLD_XXX` `FFI_XXX` `ff
 
 **Cautions:**
 
-* Since there is no way to define C numeric variables in JS, only dynamic creation using `malloc` is reasonable, so don't forget to `free` them when no longer use.
+* Since there is no way to define C numeric variables in JS, only dynamic creation using `malloc` is reasonable, so don't forget to `free` them when no longer used.
 * `ffi_type_xxx` are pointers, eg. memory addresses.
 
 Here is a simple example invoking `void test1()` in `test-lib.so`:
 
     let handle = ffi.dlopen("test-lib.so", ffi.RTLD_NOW);
-    console.log(handle);
     let test1 = ffi.dlsym(handle, 'test1');
-    console.log(test1);
     let cif = ffi.malloc(ffi.sizeof_ffi_cif);
-    console.log(ffi.ffi_prep_cif(cif, ffi.FFI_DEFAULT_ABI, 0, ffi.ffi_type_void, 0));
+    ffi.ffi_prep_cif(cif, ffi.FFI_DEFAULT_ABI, 0, ffi.ffi_type_void, 0);
     ffi.ffi_call(cif, test1, 0, 0)
     ffi.free(cif);
-    console.log(ffi.dlclose(handle));
+    ffi.dlclose(handle);
 
 And here is a slightly complex example invoking `double test2(float a, double b, const char *c)`:
 
