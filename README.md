@@ -75,7 +75,7 @@ Output is:
 
 `library name, function name, return value type representation, ...arguments type representation`.
 
-Primitive types are representated by short string corresponding to `libffi`'s type definition, I renamed some of it to more C friendly, and also added some, see `primitive_types` in `quickjs-ffi.js` for details. **Note:** All C pointers are `pointers`, they are actually memory addresses. but `char *` can be represented by `string`, and will automatically inbox/outbox with JS string, outbox is not safe and may cause pointer oob, do it at your own risk. C complex type is not yet supported.
+Primitive types are representated by short string according to `libffi`'s type definition, I renamed some of it to more C friendly, and also added some, see `primitive_types` in `quickjs-ffi.js` for details. **Note:** All C pointers are `pointers`, they are actually memory addresses. but `char *` can be represented by `string`, and will automatically inbox/outbox with JS string, outbox is not safe and may cause pointer oob, do it at your own risk. C complex type is not yet supported.
 
 Structure types are represented by array of prinitive types. Nested structures must be defined by nested array, but putting/getting element values must be flattened, which means all structure's primitive elements, in natural order, eg. 'depth first' order.
 
@@ -83,7 +83,7 @@ If function return value is structure type, it will return a flattened array.
 
 High layer caches `dlopen`, `dlsym` and `ffi_prep_cif` results, including corresponding memory allocations. Same library and function will only load once, and also will same function definitions, eg. same arguments and return value representation.
 
-Each `CFunction` instance shares dl and ffi cache, but keep it's individual memory allocations for arguments and return value, this design is for possible multithread situation.
+Each `CFunction` instance shares dl and ffi cache, but keep it's own memory allocations for arguments and return value, this design is for possible multithread situation.
 
 ## Low layer
 
