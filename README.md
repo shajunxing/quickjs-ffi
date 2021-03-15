@@ -24,22 +24,70 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-## Intruduction
+## Links
 
 * <https://bellard.org/quickjs/>
 * <https://github.com/bellard/quickjs>
 * <https://sourceware.org/libffi/>
 * <https://github.com/libffi/libffi>
 
+## Intruduction
+
 Although there's already one wrapper <https://github.com/partnernetsoftware/qjs-ffi> I found through duckduckgo, to be honest I'm not satisfied with this principle. My opinion is better to keep C code simple and stupid, and put complex logic into JS. Existing library functions, variables, macro definitions and all the things exposed should keep their original look as much as possible.
 
-So I wrote my own from scratch. My module has two layers, low layer is `quickjs-ffi.c`, compiled to `quickjs-ffi.so`, containing minimal necessary things from libc, libdl, libffi, and using it is almost the same as it was in C, high layer is pure JS code, not necessary, only makes low layer easy to use.
+So I wrote my own from scratch. My module has two layers, low layer is `quickjs-ffi.c`, compiled to `quickjs-ffi.so`, containing minimal necessary things from libc, libdl, libffi, and using it is almost the same as it was in C, high layer `quickjs-ffi.js`  makes low layer easy to use.
+
+It's east to compile, just `make`, it will produce module `quickjs-ffi.so`, test lib `test-lib.so` and will run `test.js`.
+
+## High layer
+
+**Now it's quite a lot simplified**, although I can still only promise to keep low layer unchanged, but not high layer.
+
+Assume 3 C functions (defined in `test-lib.c`):
+
+    void test1();
+    double test2(float, double, const char *);
+    void test3(struct {long; double; struct {int; float} });
+
+They can be invoked in JS like this:
+
+    import { CFunction } from './quickjs-ffi.js'
+
+    let test1 = new CFunction('test-lib.so', 'test1', 'void').invoke;
+    console.log(test1());
+
+    let test2 = new CFunction('test-lib.so', 'test2', 'double', 'float', 'double', 'string').invoke;
+    console.log(test2(3.141592654, 2.718281829, 'How do you do?'));
+
+    let test3 = new CFunction('test-lib.so', 'test3', 'void', ['long', 'double', ['int', 'float']]).invoke;
+    console.log(test3([123456789, 3.141592654, 54321, 2.718281829]));
+
+Output is:
+
+    Hello
+    undefined
+    3.141593 2.718282 How do you do?
+    5.859874570012574
+    123456789 3.141593 54321 2.718282
+    undefined
+
+`CFunction`'s constructor definition is:
+
+`library name, function name, return value type representation, ...arguments type representation`.
+
+Primitive types are representated by short string corresponding to `libffi`'s type definition, I renamed some of it to more C friendly, and also added some, see `primitive_types` in `quickjs-ffi.js` for details. **Note:** All C pointers are `pointers`, they are actually memory addresses. but `char *` can be represented by `string`, and will automatically inbox/outbox with JS string, outbox is not safe and may cause pointer oob, do it at your own risk. C complex type is not yet supported.
+
+Structure types are represented by array of prinitive types. Nested structures must be defined by nested array, but putting/getting element values must be flattened, which means all structure's primitive elements, in natural order, eg. 'depth first' order.
+
+If function return value is structure type, it will return a flattened array.
+
+High layer caches `dlopen`, `dlsym` and `ffi_prep_cif` results, including corresponding memory allocations. Same library and function will only load once, and also will same function definitions, eg. same arguments and return value representation.
+
+Each `CFunction` instance shares dl and ffi cache, but keep it's individual memory allocations for arguments and return value, this design is for possible multithread situation.
 
 ## Low layer
 
-I's quite east to compile, just `make`, it will produce module `quickjs-ffi.so`, test lib `test-lib.so` and will run `test.js`.
-
-This is an example of importing this module and print all it's members:
+This is an example of importing this module and print all exports:
 
     import * as ffi from './quickjs-ffi.so'
 
@@ -74,8 +122,11 @@ And I added my own functions below. Also I will check out-of-bound error in them
 * `undefined memwriteint(pointer buf, number buflen, number offset, number bytewidth, number val)` <br>write integer `val` to `offset`, signed/unsigned is not necessary to speciy.
 * `number memreadfloat(pointer buf, number buflen, number offset, bool isdouble)` <br>read float/double from `offset`, in C float is always 4 bytes and double is 8.
 * `undefined memwritefloat(pointer buf, number buflen, number offset, bool isdouble, double val)` <br>write float/double `val` to `offset`.
-* `string memreadstring(pointer buf, number buflen, number offset, number len)` <br>read `len` bytes from `offset`, return JS string.
-* `string memwritestring(pointer buf, number buflen, number offset, number str)` <br>write `str` to `offset`.
+* `string memreadstring(pointer buf, number buflen, number offset, number len)` <br>read `len` bytes from `offset`, returns JS string.
+* `undefined memwritestring(pointer buf, number buflen, number offset, string str)` <br>write `str` to `offset`.
+* `pointer tocstring(string str)` <br>`JS_ToCString()` wrapper of `JS_ToCString()`.
+* `undevined freecstring(pointer cstr)` <br>`JS_FreeCString()` wrapper of `JS_FreeCString()`.
+* `string newstring(pointer cstr)` <br>`JS_ToCString()` wrapper of `JS_NewString()`. **Unsafe!**
 
 Here is an example:
 
@@ -111,8 +162,9 @@ Functions in `libdl` and `libffi` are almost the same as it's C style:
 * `number dlclose(pointer handle)`
 * `pointer dlsym(pointer handle, string symbol)`
 * `string/null dlerror()`
-* `number ffi_prep_cif(pointer cif, number abi, number nargs, pointer rtype, pointer atypes )`
+* `number ffi_prep_cif(pointer cif, number abi, number nargs, pointer rtype, pointer atypes)`
 * `undefined ffi_call (pointer cif, pointer fn, pointer rvalue, pointer avalues)`
+* `number ffi_get_struct_offsets (number abi, pointer struct_type, pointer offsets)`
 
 And many necessary constant values or addresses such as `RTLD_XXX` `FFI_XXX` `ffi_type_xxx` are exposed.
 
@@ -121,7 +173,7 @@ And many necessary constant values or addresses such as `RTLD_XXX` `FFI_XXX` `ff
 * Since there is no way to define C numeric variables in JS, only dynamic creation using `malloc` is reasonable, so don't forget to `free` them when no longer used.
 * `ffi_type_xxx` are pointers, eg. memory addresses.
 
-Here is a simple example invoking `void test1()` in `test-lib.so`:
+Here is a simple example invoking `test1`:
 
     let handle = ffi.dlopen("test-lib.so", ffi.RTLD_NOW);
     let test1 = ffi.dlsym(handle, 'test1');
@@ -131,7 +183,7 @@ Here is a simple example invoking `void test1()` in `test-lib.so`:
     ffi.free(cif);
     ffi.dlclose(handle);
 
-And here is a slightly complex example invoking `double test2(float a, double b, const char *c)`:
+And here is a slightly complex example invoking `test2`:
 
     let handle = ffi.dlopen('test-lib.so', ffi.RTLD_NOW);
     if (handle != ffi.NULL) {
@@ -175,24 +227,7 @@ And here is a slightly complex example invoking `double test2(float a, double b,
         ffi.dlclose(handle);
     }
 
-In libffi document there are detailed instructions on how to pass C structures. Here is an example. Two nested Structure definition and a function `test3()` to be called:
-
-    typedef struct {
-        int i;
-        float f;
-    } s1;
-
-    typedef struct {
-        long l;
-        double d;
-        s1 s;
-    } s2;
-
-    void test3(s2 s) {
-        ...
-    }
-
-JS code looks very similar to C, except almost all variables are dynamically created, so be very careful handling memories and pointers. I will make it easier in high layer.
+In libffi document there are detailed instructions on how to pass C structures. Here is how to invoke `test3`. JS code looks very similar to C, except almost all variables are dynamically created, so be very careful dealing memories and pointers.
 
     let handle = ffi.dlopen('test-lib.so', ffi.RTLD_NOW);
     if (handle != ffi.NULL) {
@@ -261,81 +296,3 @@ JS code looks very similar to C, except almost all variables are dynamically cre
         }
         ffi.dlclose(handle);
     }
-
-## High layer
-
-I've wrapped many repeated operations in `quickjs-ffi.js`. Now previous example is quite a lot simplified.
-
-**Cautions:** high layer will definitely and frequently be changed. I can only promise to do my best to keep low layer unchanged, but not high layer. Of course you can write your own wrapper, everyone has his own idea and I will accept good ones. For example, maybe there is more graceful way to free unused pointers.
-
-Simplified example code is here:
-
-    import {
-        malloc, free, memset, memreadfloat, memwriteint, memwritefloat, NULL,
-        ffi_call,
-        ffi_type_void, ffi_type_float, ffi_type_double, ffi_type_pointer, ffi_type_sint, ffi_type_slong,
-    } from './quickjs-ffi.so'
-
-    import {
-        dl_cached_open_sym, dl_cached_close,
-        ffi_malloc_prep_cif, malloc_uintptr_array, malloc_string, malloc_float, malloc_double, malloc_uintptr, malloc_ffi_type_struct
-    } from './quickjs-ffi.js'
-
-    {
-        let test1 = dl_cached_open_sym('test-lib.so', 'test1');
-        let cif = ffi_malloc_prep_cif(0, ffi_type_void, 0);
-        ffi_call(cif, test1, 0, 0);
-        free(cif);
-    }
-
-    {
-        let test2 = dl_cached_open_sym('test-lib.so', 'test2');
-        let atypes = malloc_uintptr_array(ffi_type_float, ffi_type_double, ffi_type_pointer);
-        let cif = ffi_malloc_prep_cif(3, ffi_type_double, atypes);
-        let arg1 = malloc_float(3.141592654);
-        let arg2 = malloc_double(2.718281829);
-        let str = malloc_string(1000, 'How do you do?');
-        let arg3 = malloc_uintptr(str);
-        let avalues = malloc_uintptr_array(arg1, arg2, arg3);
-        let rvalue = malloc(8);
-        ffi_call(cif, test2, rvalue, avalues);
-        console.log(memreadfloat(rvalue, 8, 0, true));
-        free(rvalue);
-        free(avalues);
-        free(arg3);
-        free(str);
-        free(arg2);
-        free(arg1);
-        free(atypes);
-        free(cif);
-    }
-
-    {
-        let test3 = dl_cached_open_sym('test-lib.so', 'test3');
-        let s1_elements = malloc_uintptr_array(ffi_type_sint, ffi_type_float, NULL);
-        let s1 = malloc_ffi_type_struct(s1_elements);
-        let s2_elements = malloc_uintptr_array(ffi_type_slong, ffi_type_double, s1, NULL);
-        let s2 = malloc_ffi_type_struct(s2_elements);
-        let atypes = malloc_uintptr_array(s2);
-        let cif = ffi_malloc_prep_cif(1, ffi_type_void, atypes);
-        let sizeof_struct_s2 = 24;
-        let arg1 = malloc(sizeof_struct_s2);
-        memwriteint(arg1, sizeof_struct_s2, 0, 8, 123456789);
-        memwritefloat(arg1, sizeof_struct_s2, 8, true, 3.141592654);
-        memwriteint(arg1, sizeof_struct_s2, 16, 4, 54321);
-        memwritefloat(arg1, sizeof_struct_s2, 20, false, 2.718281829);
-        let avalues = malloc_uintptr_array(arg1);
-        ffi_call(cif, test3, NULL, avalues);
-        memset(arg1, 0xff, sizeof_struct_s2);
-        ffi_call(cif, test3, NULL, avalues);
-        free(avalues);
-        free(arg1);
-        free(s2);
-        free(s2_elements);
-        free(s1);
-        free(s1_elements);
-        free(atypes);
-        free(cif);
-    }
-
-    dl_cached_close('test-lib.so');

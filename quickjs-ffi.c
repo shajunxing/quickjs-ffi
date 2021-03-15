@@ -43,11 +43,15 @@ SOFTWARE.
 #define C_MACRO_UINTPTR_T_DEF(x) JS_PROP_INT32_DEF(#x, (int32_t)(x), JS_PROP_CONFIGURABLE)
 // 不能#define C_MACRO_INTPTR_DEF(x) C_MACRO_INT_DEF(x)否则#会展开为x所定义的内容而非x本身
 #define C_VAR_ADDRESS_DEF(x) JS_PROP_INT32_DEF(#x, (int32_t)(&x), JS_PROP_CONFIGURABLE)
+#define ffi_type_intptr_t ffi_type_sint32
+#define ffi_type_uintptr_t ffi_type_uint32
 #elif UINTPTR_MAX == UINT64_MAX
 #define JS_TO_UINTPTR_T(ctx, pres, val) JS_ToInt64(ctx, (int64_t *)(pres), val)
 #define JS_NEW_UINTPTR_T(ctx, val) JS_NewInt64(ctx, (int64_t)(val))
 #define C_MACRO_UINTPTR_T_DEF(x) JS_PROP_INT64_DEF(#x, (int64_t)(x), JS_PROP_CONFIGURABLE)
 #define C_VAR_ADDRESS_DEF(x) JS_PROP_INT64_DEF(#x, (int64_t)(&x), JS_PROP_CONFIGURABLE)
+#define ffi_type_intptr_t ffi_type_sint64
+#define ffi_type_uintptr_t ffi_type_uint64
 #else
 #error "'uintptr_t' neither 32bit nor 64 bit, I don't know how to handle it."
 #endif
@@ -58,12 +62,14 @@ SOFTWARE.
 #define JS_NEW_SIZE_T(ctx, val) JS_NewInt32(ctx, (int32_t)(val))
 #define JS_PROP_SIZE_T_DEF(name, val) JS_PROP_INT32_DEF(name, (int32_t)(val), JS_PROP_CONFIGURABLE)
 #define C_SIZEOF_DEF(x) JS_PROP_INT32_DEF(STR(sizeof_##x), (int32_t)(sizeof(x)), JS_PROP_CONFIGURABLE)
+#define ffi_type_size_t ffi_type_uint32
 #elif SIZE_MAX == UINT64_MAX
 #define JS_TO_SIZE_T(ctx, pres, val) JS_ToInt64(ctx, (int64_t *)(pres), val)
 #define JS_NEW_SIZE_T(ctx, val) JS_NewInt64(ctx, (int64_t)(val))
 #define JS_PROP_SIZE_T_DEF(name, val) JS_PROP_INT64_DEF(name, (int64_t)(val), JS_PROP_CONFIGURABLE)
 #define C_SIZEOF_DEF(x) JS_PROP_INT64_DEF(STR(sizeof_##x), (int64_t)(sizeof(x)), JS_PROP_CONFIGURABLE)
 #define C_OFFSETOF_DEF(t, d) JS_PROP_INT64_DEF(STR(offsetof_##t##_##d), (int64_t)(offsetof(t, d)), JS_PROP_CONFIGURABLE)
+#define ffi_type_size_t ffi_type_sint32
 #else
 #error "'size_t' neither 32bit nor 64 bit, I don't know how to handle it."
 #endif
@@ -391,6 +397,28 @@ static JSValue js_memwritestring(JSContext *ctx, JSValueConst this_val, int argc
     return JS_UNDEFINED;
 }
 
+static JSValue js_tocstring(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_string}))
+    return JS_NEW_UINTPTR_T(ctx, JS_ToCString(ctx, argv[0]));
+}
+
+static JSValue js_freecstring(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    char *str;
+    
+    CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number}))
+    JS_TO_UINTPTR_T(ctx, &str, argv[0]);
+    JS_FreeCString(ctx, str);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_newstring(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    char *str;
+    
+    CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number}))
+    JS_TO_UINTPTR_T(ctx, &str, argv[0]);
+    return JS_NewString(ctx, str);
+}
+
 static JSValue js_libdl_dlopen(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     const char *filename;
     int flags;
@@ -448,15 +476,33 @@ static JSValue js_libffi_ffi_prep_cif(JSContext *ctx, JSValueConst this_val, int
     ffi_abi abi;
     unsigned int nargs;
     ffi_type *rtype;
-    ffi_type **argtypes;
+    ffi_type **atypes;
 
     CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number, t_number, t_number, t_number, t_number}))
     JS_TO_UINTPTR_T(ctx, &cif, argv[0]);
     JS_TO_INT(ctx, &abi, argv[1]);
     JS_TO_INT(ctx, &nargs, argv[2]);
     JS_TO_UINTPTR_T(ctx, &rtype, argv[3]);
-    JS_TO_UINTPTR_T(ctx, &argtypes, argv[4]);
-    return JS_NEW_INT(ctx, ffi_prep_cif(cif, abi, nargs, rtype, argtypes));
+    JS_TO_UINTPTR_T(ctx, &atypes, argv[4]);
+    return JS_NEW_INT(ctx, ffi_prep_cif(cif, abi, nargs, rtype, atypes));
+}
+
+static JSValue js_libffi_ffi_prep_cif_var(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    ffi_cif *cif;
+    ffi_abi abi;
+    unsigned int nfixedargs;
+    unsigned int ntotalargs;
+    ffi_type *rtype;
+    ffi_type **atypes;
+
+    CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number, t_number, t_number, t_number, t_number, t_number}))
+    JS_TO_UINTPTR_T(ctx, &cif, argv[0]);
+    JS_TO_INT(ctx, &abi, argv[1]);
+    JS_TO_INT(ctx, &nfixedargs, argv[2]);
+    JS_TO_INT(ctx, &ntotalargs, argv[2]);
+    JS_TO_UINTPTR_T(ctx, &rtype, argv[4]);
+    JS_TO_UINTPTR_T(ctx, &atypes, argv[5]);
+    return JS_NEW_INT(ctx, ffi_prep_cif_var(cif, abi, nfixedargs, ntotalargs, rtype, atypes));
 }
 
 static JSValue js_libffi_ffi_call(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
@@ -472,6 +518,18 @@ static JSValue js_libffi_ffi_call(JSContext *ctx, JSValueConst this_val, int arg
     JS_TO_UINTPTR_T(ctx, &avalues, argv[3]);
     ffi_call(cif, fn, rvalue, avalues);
     return JS_UNDEFINED;
+}
+
+static JSValue js_ffi_get_struct_offsets(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    ffi_abi abi;
+    ffi_type *struct_type;
+    size_t *offsets;
+
+    CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number, t_number, t_number}))
+    JS_TO_INT(ctx, &abi, argv[0]);
+    JS_TO_UINTPTR_T(ctx, &struct_type, argv[1]);
+    JS_TO_UINTPTR_T(ctx, &offsets, argv[2]);
+    return JS_NEW_INT(ctx, ffi_get_struct_offsets(abi, struct_type, offsets));
 }
 
 static JSCFunctionListEntry funcs[] = {
@@ -490,6 +548,9 @@ static JSCFunctionListEntry funcs[] = {
     JS_CFUNC_DEF("memwritefloat", 5, js_memwritefloat),
     JS_CFUNC_DEF("memreadstring", 4, js_memreadstring),
     JS_CFUNC_DEF("memwritestring", 4, js_memwritestring),
+    JS_CFUNC_DEF("tocstring", 1, js_tocstring),
+    JS_CFUNC_DEF("freecstring", 1, js_freecstring),
+    JS_CFUNC_DEF("newstring", 1, js_newstring),
     C_MACRO_UINTPTR_T_DEF(NULL),
     C_SIZEOF_DEF(uintptr_t),
     C_SIZEOF_DEF(int),
@@ -518,7 +579,9 @@ static JSCFunctionListEntry funcs[] = {
     // libffi
     //
     JS_CFUNC_DEF("ffi_prep_cif", 5, js_libffi_ffi_prep_cif),
+    JS_CFUNC_DEF("ffi_prep_cif_var", 6, js_libffi_ffi_prep_cif_var),
     JS_CFUNC_DEF("ffi_call", 4, js_libffi_ffi_call),
+    JS_CFUNC_DEF("ffi_get_struct_offsets", 3, js_ffi_get_struct_offsets),
     C_ENUM_DEF(FFI_OK),
     C_ENUM_DEF(FFI_BAD_TYPEDEF),
     C_ENUM_DEF(FFI_BAD_ABI),
@@ -556,6 +619,9 @@ static JSCFunctionListEntry funcs[] = {
     C_VAR_ADDRESS_DEF(ffi_type_sint),
     C_VAR_ADDRESS_DEF(ffi_type_ulong),
     C_VAR_ADDRESS_DEF(ffi_type_slong),
+    C_VAR_ADDRESS_DEF(ffi_type_uintptr_t),
+    C_VAR_ADDRESS_DEF(ffi_type_intptr_t),
+    C_VAR_ADDRESS_DEF(ffi_type_size_t),
     C_MACRO_INT_DEF(FFI_TYPE_STRUCT),
     C_MACRO_INT_DEF(FFI_TYPE_COMPLEX),
 #endif
