@@ -75,7 +75,7 @@ const rfloat = isdouble =>
 const wfloat = isdouble =>
     (ptr, val) => ffi.memwritefloat(ptr, isdouble ? 8 : 4, 0, isdouble, val);
 
-const primitive_types = {
+const primitiveTypes = { // [ffi_type address, byte width, read function, write function]
     'void': [ffi.ffi_type_void, 0, dummy, dummy],
     'uint8_t': [ffi.ffi_type_uint8, 1, rint(false, 1), wint(1)],
     'int8_t': [ffi.ffi_type_sint8, 1, rint(true, 1), wint(1)],
@@ -120,7 +120,7 @@ class MemoryAllocator {
     }
 }
 
-function alloc_uintptr_array(mem, ...vals) {
+function allocUintptrArray(mem, ...vals) {
     let buflen = ffi.sizeof_uintptr_t * vals.length;
     let buf = mem.alloc(buflen);
     for (let i = 0; i < vals.length; i++) {
@@ -129,16 +129,20 @@ function alloc_uintptr_array(mem, ...vals) {
     return buf;
 }
 
-function alloc_struct_type(mem, ...elems) {
+function readUintptrArray(buf, i) {
+    return ffi.memreadint(buf + ffi.sizeof_uintptr_t * i, ffi.sizeof_uintptr_t * i, 0, true, ffi.sizeof_uintptr_t * i);
+}
+
+function allocStructType(mem, ...elems) {
     let typ = mem.alloc(ffi.sizeof_ffi_type);
     ffi.memset(typ, 0, ffi.sizeof_ffi_type);
     ffi.memwriteint(typ, ffi.sizeof_ffi_type, ffi.offsetof_ffi_type_type, 2, ffi.FFI_TYPE_STRUCT);
     ffi.memwriteint(typ, ffi.sizeof_ffi_type, ffi.offsetof_ffi_type_elements, ffi.sizeof_uintptr_t,
-        alloc_uintptr_array(mem, ...elems, ffi.NULL));
+        allocUintptrArray(mem, ...elems, ffi.NULL));
     return typ;
 }
 
-function get_struct_offsets(struct_typ, elem_count) {
+function getStructOffsets(struct_typ, elem_count) {
     let ptr = ffi.malloc(ffi.sizeof_size_t * elem_count);
     let status = ffi.ffi_get_struct_offsets(ffi.FFI_DEFAULT_ABI, struct_typ, ptr);
     if (status != ffi.FFI_OK) {
@@ -154,82 +158,61 @@ function get_struct_offsets(struct_typ, elem_count) {
     return offsets;
 }
 
-function parse_type(mem, repr) {
-    let total_elements = 0;
-    let element_representations = []
-    let read_functions = [];
-    let write_functions = [];
-
+function parseType(mem, repr) {
+    let elementsRepresentations = []
     class Node {
-        ffi_type = null;
-        width = null;
-        abs_offset = 0;
+        ffiType = null;
+        nBytes = null;
+        absOffset = 0;
         children = null;
-        children_rel_offsets = null;
+        childrenRelOffsets = null;
     }
-
-    function build_tree(mem, repr) {
+    function buildTree(mem, repr) {
         if (typeof repr === 'string') {
-            if (!primitive_types.hasOwnProperty(repr)) {
+            if (!primitiveTypes.hasOwnProperty(repr)) {
                 throw new TypeError('primitive type \"' + repr + '\" not supported');
             }
-            element_representations.push(repr);
-            read_functions.push(primitive_types[repr][2]);
-            write_functions.push(primitive_types[repr][3]);
-            total_elements++;
+            elementsRepresentations.push(repr);
             let node = new Node();
-            node.ffi_type = primitive_types[repr][0];
-            node.width = primitive_types[repr][1];
+            node.ffiType = primitiveTypes[repr][0];
+            node.nBytes = primitiveTypes[repr][1];
             return node;
         } else if (Array.isArray(repr)) {
             let node = new Node();
             node.children = [];
             for (let pr of repr) {
-                node.children.push(build_tree(mem, pr));
+                node.children.push(buildTree(mem, pr));
             }
-            node.ffi_type = alloc_struct_type(mem, ...node.children.map(child => child.ffi_type));
-            node.children_rel_offsets = get_struct_offsets(node.ffi_type, node.children.length);
+            node.ffiType = allocStructType(mem, ...node.children.map(child => child.ffiType));
+            node.childrenRelOffsets = getStructOffsets(node.ffiType, node.children.length);
             return node;
         } else {
             throw new TypeError('type representation neither string nor array');
         }
     }
-
-    let root = build_tree(mem, repr);
-
-    let elements_offset = [];
-    let last_primitive_element_offset = 0;
-    let last_primitive_element_width = 0;
-
-    function walk_tree(node) {
+    let root = buildTree(mem, repr);
+    let elementsOffsets = [];
+    let lastPrimitiveElementOffset = 0;
+    let lastPrimitiveElementByteWidth = 0;
+    function walkTree(node) {
         if (node.children !== null) {
             for (let i = 0; i < node.children.length; i++) {
-                node.children[i].abs_offset = node.children_rel_offsets[i] + node.abs_offset;
-                walk_tree(node.children[i]);
+                node.children[i].absOffset = node.childrenRelOffsets[i] + node.absOffset;
+                walkTree(node.children[i]);
             }
         } else {
-            elements_offset.push(node.abs_offset);
-            last_primitive_element_offset = node.abs_offset;
-            last_primitive_element_width = node.width;
+            elementsOffsets.push(node.absOffset);
+            lastPrimitiveElementOffset = node.absOffset;
+            lastPrimitiveElementByteWidth = node.nBytes;
         }
     }
-
-    walk_tree(root);
-
+    walkTree(root);
     let ret = {
-        typ: root.ffi_type,
-        nbytes: last_primitive_element_offset + last_primitive_element_width,
-        nelems: total_elements,
-        ereprs: element_representations,
-        offsets: elements_offset,
-        rfuncs: read_functions,
-        wfuncs: write_functions,
+        typ: root.ffiType,
+        nbytes: lastPrimitiveElementOffset + lastPrimitiveElementByteWidth,
+        ereprs: elementsRepresentations,
+        eoffsets: elementsOffsets,
     };
-
-    // for (let k in ret) {
-    //     console.log(k, ret[k]);
-    // }
-
     return ret;
 }
 
@@ -242,9 +225,9 @@ function prepCif(rrepr, ...areprs) {
     }
     let mem = new MemoryAllocator();
     let nargs = areprs.length;
-    let aparsed = areprs.map(repr => parse_type(mem, repr));
-    let rparsed = parse_type(mem, rrepr);
-    let atypes = alloc_uintptr_array(mem, ...aparsed.map(parsed => parsed.typ));
+    let aparsed = areprs.map(repr => parseType(mem, repr));
+    let rparsed = parseType(mem, rrepr);
+    let atypes = allocUintptrArray(mem, ...aparsed.map(parsed => parsed.typ));
     let rtype = rparsed.typ;
     let cif = mem.alloc(ffi.sizeof_ffi_cif);
     let status = ffi.ffi_prep_cif(cif, ffi.FFI_DEFAULT_ABI, nargs, rtype, atypes);
@@ -283,51 +266,60 @@ export class CFunction {
     mem = new MemoryAllocator();
     cstr = new CStringAllocator();
     cif;
-    fn;
-    rvar;
-    avars;
-    avar_list = [];
-    rread;
-    rnelems;
-    aread;
-    awrite;
+    cfuncptr;
+    rvalue;
+    avalues;
+    avaluesptr;
+    rereprs;
+    aereprs;
+    reoffsets;
+    aeoffsets;
     constructor(filename, symbol, rrepr, ...areprs) {
-        this.fn = dlSym(filename, symbol);
+        this.cfuncptr = dlSym(filename, symbol);
         let c = prepCif(rrepr, ...areprs);
         this.cif = c.cif;
-        this.rvar = this.mem.alloc(c.rparsed.nbytes);
-        this.rread = e => c.rparsed.rfuncs[e](this.rvar + c.rparsed.offsets[e]);
-        this.rnelems = c.rparsed.nelems;
+        this.rvalue = this.mem.alloc(c.rparsed.nbytes);
+        this.avalues = c.aparsed.map(ap => this.mem.alloc(ap.nbytes));
+        this.avaluesptr = allocUintptrArray(this.mem, ...this.avalues);
         this.rereprs = c.rparsed.ereprs;
-        this.avar_list = c.aparsed.map(ap => this.mem.alloc(ap.nbytes));
-        this.avars = alloc_uintptr_array(this.mem, ...this.avar_list);
-        this.aread = (a, e) => c.aparsed[a].rfuncs[e](this.avar_list[a] + c.aparsed[a].offsets[e]);
-        this.awrite = (a, e, val) => c.aparsed[a].wfuncs[e](this.avar_list[a] + c.aparsed[a].offsets[e], val);
         this.aereprs = c.aparsed.map(ap => ap.ereprs);
+        this.reoffsets = c.rparsed.eoffsets;
+        this.aeoffsets = c.aparsed.map(ap => ap.eoffsets);
     }
     invoke = (...args) => {
+        let writeArg = (a, e, val) => {
+            let repr = this.aereprs[a][e];
+            let f = primitiveTypes[repr][3];
+            let p = this.avalues[a] + this.aeoffsets[a][e];
+            repr == 'string' ? f(p, this.cstr.to(val)) : f(p, val);
+        }
         for (let a = 0; a < args.length; a++) {
             let arg = args[a];
             if (Array.isArray(arg)) {
                 for (let e = 0; e < arg.length; e++) {
-                    this.aereprs[a][e] == 'string' ? this.awrite(a, e, this.cstr.to(arg[e])) : this.awrite(a, e, arg[e]);
+                    writeArg(a, e, arg[e]);
                 }
             } else {
-                this.aereprs[a][0] == 'string' ? this.awrite(a, 0, this.cstr.to(arg)) : this.awrite(a, 0, arg);
+                writeArg(a, 0, arg);
             }
         }
-        ffi.ffi_call(this.cif, this.fn, this.rvar, this.avars);
-        let ret;
-        if (this.rnelems == 1) {
-            ret = this.rereprs[0] == 'string' ? ffi.newstring(this.rread(0)) : this.rread(0);
-        } else {
-            ret = [];
-            for (let e = 0; e < this.rnelems; e++) {
-                this.rereprs[e] == 'string' ? ret.push(ffi.newstring(this.rread(e))) : ret.push(this.rread(e));
-            }
-        }
+        ffi.ffi_call(this.cif, this.cfuncptr, this.rvalue, this.avaluesptr);
         this.cstr.free();
-        return ret;
+        let readRet = e => {
+            let repr = this.rereprs[e];
+            let f = primitiveTypes[repr][2];
+            let p = this.rvalue + this.reoffsets[e];
+            return repr == 'string' ? ffi.newstring(f(p)) : f(p);
+        }
+        if (this.rereprs.length == 1) {
+            return readRet(0);
+        } else {
+            let ret = [];
+            for (let e = 0; e < this.rereprs.length; e++) {
+                ret.push(readRet(e));
+            }
+            return ret;
+        }
     }
     free = () => {
         this.mem.free();
@@ -335,5 +327,49 @@ export class CFunction {
     }
 }
 
-
-
+export class CCallback {
+    mem = new MemoryAllocator();
+    cstr = new CStringAllocator();
+    cif;
+    cfuncptr;
+    rvalue;
+    avalues;
+    avaluesptr;
+    rereprs;
+    aereprs;
+    reoffsets;
+    aeoffsets;
+    closure;
+    jsfunc;
+    constructor(jsfunc, rrepr, ...areprs) {
+        this.jsfunc = jsfunc;
+        let pp = this.mem.alloc(ffi.sizeof_uintptr_t);
+        this.closure = ffi.ffi_closure_alloc(ffi.sizeof_ffi_closure, pp);
+        this.cfuncptr = ffi.memreadint(pp, ffi.sizeof_uintptr_t, 0, true, ffi.sizeof_uintptr_t);
+        let c = prepCif(rrepr, ...areprs);
+        this.cif = c.cif;
+        this.rvalue = this.mem.alloc(c.rparsed.nbytes);
+        // this.avalues = c.aparsed.map(ap => this.mem.alloc(ap.nbytes));
+        // this.avaluesptr = allocUintptrArray(this.mem, ...this.avalues);
+        this.rereprs = c.rparsed.ereprs;
+        this.aereprs = c.aparsed.map(ap => ap.ereprs);
+        this.reoffsets = c.rparsed.eoffsets;
+        this.aeoffsets = c.aparsed.map(ap => ap.eoffsets);
+        let user_data = this.mem.alloc(ffi.sizeof_ffi_closure_js_func_data);
+        ffi.fill_ffi_closure_js_func_data(user_data, this.adapter);
+        let status = ffi.ffi_prep_closure_loc(this.closure, this.cif, user_data, this.cfuncptr);
+        if (status != ffi.FFI_OK) {
+            this.mem.free();
+            this.cstr.free();
+            throw new TypeError('ffi_prep_closure_loc failed with return code ' + status);
+        }
+    }
+    adapter = () => {
+        console.log('foo');
+    }
+    free = () => {
+        ffi.ffi_closure_free(this.closure);
+        this.mem.free();
+        this.cstr.free();
+    }
+}

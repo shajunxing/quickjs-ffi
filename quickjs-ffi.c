@@ -29,11 +29,11 @@ SOFTWARE.
 #include <limits.h>
 #include <quickjs/quickjs.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stddef.h>
 
 #define C_MACRO_STRING_DEF(x) JS_PROP_STRING_DEF(#x, x, JS_PROP_CONFIGURABLE)
 
@@ -96,6 +96,7 @@ enum argtype {
     t_number,
     t_string,
     t_string_or_null,
+    t_function,
 };
 
 static bool check_args(JSContext *ctx, int argc, JSValueConst *argv, enum argtype argtype_list[], int argtype_count) {
@@ -135,6 +136,12 @@ static bool check_args(JSContext *ctx, int argc, JSValueConst *argv, enum argtyp
                     return false;
                 }
                 break;
+            case t_function:
+                if (!JS_IsFunction(ctx, argv[i])) {
+                    JS_ThrowTypeError(ctx, "argv[%d] must be function", i);
+                    return false;
+                }
+                break;
             default:
                 JS_ThrowTypeError(ctx, "argv[%d] type definition is not yet supported", i);
                 return false;
@@ -150,7 +157,6 @@ static bool check_args(JSContext *ctx, int argc, JSValueConst *argv, enum argtyp
 
 static JSValue js_libc_malloc(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     size_t size;
-
     CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number}))
     JS_TO_SIZE_T(ctx, &size, argv[0]);
     return JS_NEW_UINTPTR_T(ctx, malloc(size));
@@ -158,7 +164,6 @@ static JSValue js_libc_malloc(JSContext *ctx, JSValueConst this_val, int argc, J
 
 static JSValue js_libc_free(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     void *ptr;
-
     CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number}))
     JS_TO_UINTPTR_T(ctx, &ptr, argv[0]);
     free(ptr);
@@ -169,7 +174,6 @@ static JSValue js_libc_memset(JSContext *ctx, JSValueConst this_val, int argc, J
     void *s;
     int c;
     size_t n;
-
     CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number, t_number, t_number}))
     JS_TO_UINTPTR_T(ctx, &s, argv[0]);
     JS_TO_INT(ctx, &c, argv[1]);
@@ -181,7 +185,6 @@ static JSValue js_libc_memcpy(JSContext *ctx, JSValueConst this_val, int argc, J
     void *dest;
     void *src;
     size_t n;
-
     CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number, t_number, t_number}))
     JS_TO_UINTPTR_T(ctx, &dest, argv[0]);
     JS_TO_UINTPTR_T(ctx, &src, argv[1]);
@@ -223,7 +226,6 @@ static JSValue js_fprinthex(JSContext *ctx, JSValueConst this_val, int argc, JSV
     FILE *stream;
     void *data;
     size_t size;
-
     CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number, t_number, t_number}))
     JS_TO_UINTPTR_T(ctx, &stream, argv[0]);
     JS_TO_UINTPTR_T(ctx, &data, argv[1]);
@@ -235,7 +237,6 @@ static JSValue js_fprinthex(JSContext *ctx, JSValueConst this_val, int argc, JSV
 static JSValue js_printhex(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     void *data;
     size_t size;
-
     CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number, t_number}))
     JS_TO_UINTPTR_T(ctx, &data, argv[0]);
     JS_TO_SIZE_T(ctx, &size, argv[1]);
@@ -249,7 +250,6 @@ static JSValue js_memreadint(JSContext *ctx, JSValueConst this_val, int argc, JS
     size_t offset;
     bool issigned;
     size_t bytewidth;
-
     CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number, t_number, t_number, t_bool, t_number}))
     JS_TO_UINTPTR_T(ctx, &buf, argv[0]);
     JS_TO_SIZE_T(ctx, &buflen, argv[1]);
@@ -282,7 +282,6 @@ static JSValue js_memwriteint(JSContext *ctx, JSValueConst this_val, int argc, J
     size_t offset;
     size_t bytewidth;
     int64_t val;
-
     CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number, t_number, t_number, t_number, t_number}))
     JS_TO_UINTPTR_T(ctx, &buf, argv[0]);
     JS_TO_SIZE_T(ctx, &buflen, argv[1]);
@@ -319,7 +318,6 @@ static JSValue js_memreadfloat(JSContext *ctx, JSValueConst this_val, int argc, 
     size_t buflen;
     size_t offset;
     bool isdouble;
-
     CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number, t_number, t_number, t_bool}))
     JS_TO_UINTPTR_T(ctx, &buf, argv[0]);
     JS_TO_SIZE_T(ctx, &buflen, argv[1]);
@@ -338,7 +336,6 @@ static JSValue js_memwritefloat(JSContext *ctx, JSValueConst this_val, int argc,
     size_t offset;
     bool isdouble;
     double val;
-
     CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number, t_number, t_number, t_bool, t_number}))
     JS_TO_UINTPTR_T(ctx, &buf, argv[0]);
     JS_TO_SIZE_T(ctx, &buflen, argv[1]);
@@ -362,7 +359,6 @@ static JSValue js_memreadstring(JSContext *ctx, JSValueConst this_val, int argc,
     size_t buflen;
     size_t offset;
     size_t len;
-
     CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number, t_number, t_number, t_number}))
     JS_TO_UINTPTR_T(ctx, &buf, argv[0]);
     JS_TO_SIZE_T(ctx, &buflen, argv[1]);
@@ -380,7 +376,6 @@ static JSValue js_memwritestring(JSContext *ctx, JSValueConst this_val, int argc
     size_t buflen;
     size_t offset;
     const char *str;
-
     CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number, t_number, t_number, t_string}))
     JS_TO_UINTPTR_T(ctx, &buf, argv[0]);
     JS_TO_SIZE_T(ctx, &buflen, argv[1]);
@@ -404,7 +399,6 @@ static JSValue js_tocstring(JSContext *ctx, JSValueConst this_val, int argc, JSV
 
 static JSValue js_freecstring(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     char *str;
-    
     CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number}))
     JS_TO_UINTPTR_T(ctx, &str, argv[0]);
     JS_FreeCString(ctx, str);
@@ -413,7 +407,6 @@ static JSValue js_freecstring(JSContext *ctx, JSValueConst this_val, int argc, J
 
 static JSValue js_newstring(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     char *str;
-    
     CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number}))
     JS_TO_UINTPTR_T(ctx, &str, argv[0]);
     return JS_NewString(ctx, str);
@@ -423,7 +416,6 @@ static JSValue js_libdl_dlopen(JSContext *ctx, JSValueConst this_val, int argc, 
     const char *filename;
     int flags;
     void *ret;
-
     CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_string_or_null, t_number}))
     filename = JS_IsString(argv[0]) ? JS_ToCString(ctx, argv[0]) : NULL;
     JS_ToInt32(ctx, &flags, argv[1]);
@@ -438,7 +430,6 @@ static JSValue js_libdl_dlopen(JSContext *ctx, JSValueConst this_val, int argc, 
 static JSValue js_libdl_dlclose(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     void *handle;
     int ret;
-
     CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number}))
     JS_TO_UINTPTR_T(ctx, &handle, argv[0]);
     // printf("%p\n", handle);
@@ -450,7 +441,6 @@ static JSValue js_libdl_dlsym(JSContext *ctx, JSValueConst this_val, int argc, J
     void *handle;
     const char *symbol;
     void *ret;
-
     CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number, t_string}))
     JS_TO_UINTPTR_T(ctx, &handle, argv[0]);
     symbol = JS_ToCString(ctx, argv[1]);
@@ -465,7 +455,6 @@ static JSValue js_libdl_dlsym(JSContext *ctx, JSValueConst this_val, int argc, J
 
 static JSValue js_libdl_dlerror(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     char *ret;
-
     CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){}))
     ret = dlerror();
     return ret ? JS_NewString(ctx, ret) : JS_NULL;
@@ -477,7 +466,6 @@ static JSValue js_libffi_ffi_prep_cif(JSContext *ctx, JSValueConst this_val, int
     unsigned int nargs;
     ffi_type *rtype;
     ffi_type **atypes;
-
     CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number, t_number, t_number, t_number, t_number}))
     JS_TO_UINTPTR_T(ctx, &cif, argv[0]);
     JS_TO_INT(ctx, &abi, argv[1]);
@@ -494,7 +482,6 @@ static JSValue js_libffi_ffi_prep_cif_var(JSContext *ctx, JSValueConst this_val,
     unsigned int ntotalargs;
     ffi_type *rtype;
     ffi_type **atypes;
-
     CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number, t_number, t_number, t_number, t_number, t_number}))
     JS_TO_UINTPTR_T(ctx, &cif, argv[0]);
     JS_TO_INT(ctx, &abi, argv[1]);
@@ -510,7 +497,6 @@ static JSValue js_libffi_ffi_call(JSContext *ctx, JSValueConst this_val, int arg
     void *fn;
     void *rvalue;
     void **avalues;
-
     CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number, t_number, t_number, t_number}))
     JS_TO_UINTPTR_T(ctx, &cif, argv[0]);
     JS_TO_UINTPTR_T(ctx, &fn, argv[1]);
@@ -524,7 +510,6 @@ static JSValue js_ffi_get_struct_offsets(JSContext *ctx, JSValueConst this_val, 
     ffi_abi abi;
     ffi_type *struct_type;
     size_t *offsets;
-
     CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number, t_number, t_number}))
     JS_TO_INT(ctx, &abi, argv[0]);
     JS_TO_UINTPTR_T(ctx, &struct_type, argv[1]);
@@ -532,9 +517,63 @@ static JSValue js_ffi_get_struct_offsets(JSContext *ctx, JSValueConst this_val, 
     return JS_NEW_INT(ctx, ffi_get_struct_offsets(abi, struct_type, offsets));
 }
 
+static JSValue js_ffi_closure_alloc(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    size_t size;
+    void **code;
+    CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number, t_number}))
+    JS_TO_SIZE_T(ctx, &size, argv[0]);
+    JS_TO_UINTPTR_T(ctx, &code, argv[1]);
+    return JS_NEW_UINTPTR_T(ctx, ffi_closure_alloc(size, code));
+}
+
+static JSValue js_ffi_closure_free(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    void *writable;
+    CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number}))
+    JS_TO_UINTPTR_T(ctx, &writable, argv[0]);
+    ffi_closure_free(writable);
+    return JS_UNDEFINED;
+}
+
+typedef struct {
+    JSContext *ctx;
+    JSValue this;
+    JSValue func;
+} ffi_closure_js_func_data;
+
+static JSValue js_fill_ffi_closure_js_func_data(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    ffi_closure_js_func_data *data;
+    CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number, t_function}))
+    JS_TO_UINTPTR_T(ctx, &data, argv[0]);
+    data->ctx = ctx;
+    data->this = this_val;
+    data->func = argv[1];
+    printf("%lu %lu %lu %lu %lu\n", data->ctx, (data->func).u.ptr, (data->func).tag, (data->this).u.ptr, (data->this).tag);
+    JS_Call(data->ctx, data->func, data->this, 0, 0);
+    return JS_UNDEFINED;
+}
+
+static void ffi_closure_js_func_adapter(ffi_cif *cif, void *ret, void *args[], void *user_data) {
+    ffi_closure_js_func_data *data = (ffi_closure_js_func_data *)user_data;
+    printf("%lu %lu %lu %lu %lu\n", data->ctx, (data->func).u.ptr, (data->func).tag, (data->this).u.ptr, (data->this).tag);
+    ret = JS_NEW_UINTPTR_T(ctx, JS_Call(data->ctx, data->func, data->this, 1, (JSValueConst[]){JS_NEW_UINTPTR_T(ctx, args)}));
+}
+
+static JSValue js_ffi_prep_closure_loc(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    ffi_closure *closure;
+    ffi_cif *cif;
+    void *user_data;
+    void *codeloc;
+    CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number, t_number, t_number, t_number}))
+    JS_TO_UINTPTR_T(ctx, &closure, argv[0]);
+    JS_TO_UINTPTR_T(ctx, &cif, argv[1]);
+    JS_TO_UINTPTR_T(ctx, &user_data, argv[2]);
+    JS_TO_UINTPTR_T(ctx, &codeloc, argv[3]);
+    return JS_NEW_INT(ctx, ffi_prep_closure_loc(closure, cif, ffi_closure_js_func_adapter, user_data, codeloc));
+}
+
 static JSCFunctionListEntry funcs[] = {
     //
-    // basic memory handling functions, partly from libc
+    // basic memory handling functions, partly from libc and quickjs itself
     //
     JS_CFUNC_DEF("malloc", 1, js_libc_malloc),
     JS_CFUNC_DEF("free", 1, js_libc_free),
@@ -582,6 +621,10 @@ static JSCFunctionListEntry funcs[] = {
     JS_CFUNC_DEF("ffi_prep_cif_var", 6, js_libffi_ffi_prep_cif_var),
     JS_CFUNC_DEF("ffi_call", 4, js_libffi_ffi_call),
     JS_CFUNC_DEF("ffi_get_struct_offsets", 3, js_ffi_get_struct_offsets),
+    JS_CFUNC_DEF("ffi_closure_alloc", 2, js_ffi_closure_alloc),
+    JS_CFUNC_DEF("ffi_closure_free", 1, js_ffi_closure_free),
+    JS_CFUNC_DEF("fill_ffi_closure_js_func_data", 1, js_fill_ffi_closure_js_func_data),
+    JS_CFUNC_DEF("ffi_prep_closure_loc", 4, js_ffi_prep_closure_loc),
     C_ENUM_DEF(FFI_OK),
     C_ENUM_DEF(FFI_BAD_TYPEDEF),
     C_ENUM_DEF(FFI_BAD_ABI),
@@ -592,6 +635,8 @@ static JSCFunctionListEntry funcs[] = {
     C_OFFSETOF_DEF(ffi_type, alignment),
     C_OFFSETOF_DEF(ffi_type, type),
     C_OFFSETOF_DEF(ffi_type, elements),
+    C_SIZEOF_DEF(ffi_closure),
+    C_SIZEOF_DEF(ffi_closure_js_func_data),
 #ifndef LIBFFI_HIDE_BASIC_TYPES
     C_VAR_ADDRESS_DEF(ffi_type_void),
     C_VAR_ADDRESS_DEF(ffi_type_uint8),
