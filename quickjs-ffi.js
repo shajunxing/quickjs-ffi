@@ -332,15 +332,13 @@ export class CCallback {
     cstr = new CStringAllocator();
     cif;
     cfuncptr;
-    // rvalue;
-    // avalues;
-    // avaluesptr;
     rereprs;
     aereprs;
     reoffsets;
     aeoffsets;
     closure;
     jsfunc;
+    userdata;
     constructor(jsfunc, rrepr, ...areprs) {
         this.jsfunc = jsfunc;
         let pp = this.mem.alloc(ffi.sizeof_uintptr_t);
@@ -348,16 +346,14 @@ export class CCallback {
         this.cfuncptr = ffi.memreadint(pp, ffi.sizeof_uintptr_t, 0, true, ffi.sizeof_uintptr_t);
         let c = prepCif(rrepr, ...areprs);
         this.cif = c.cif;
-        this.rvalue = this.mem.alloc(c.rparsed.nbytes);
-        // this.avalues = c.aparsed.map(ap => this.mem.alloc(ap.nbytes));
-        // this.avaluesptr = allocUintptrArray(this.mem, ...this.avalues);
         this.rereprs = c.rparsed.ereprs;
         this.aereprs = c.aparsed.map(ap => ap.ereprs);
         this.reoffsets = c.rparsed.eoffsets;
         this.aeoffsets = c.aparsed.map(ap => ap.eoffsets);
-        let user_data = this.mem.alloc(ffi.sizeof_ffi_closure_js_func_data);
-        ffi.fill_ffi_closure_js_func_data(user_data, this.adapter);
-        let status = ffi.ffi_prep_closure_loc(this.closure, this.cif, user_data, this.cfuncptr);
+        this.userdata = this.mem.alloc(ffi.sizeof_ffi_closure_js_func_data);
+        ffi.fill_ffi_closure_js_func_data(this.userdata, this.adapter);
+        let status = ffi.ffi_prep_closure_loc(
+            this.closure, this.cif, ffi.ffi_closure_js_func_adapter, this.userdata, this.cfuncptr);
         if (status != ffi.FFI_OK) {
             this.mem.free();
             this.cstr.free();
@@ -365,8 +361,8 @@ export class CCallback {
         }
     }
     adapter = (rvalueptr, avaluesptr) => {
-        console.log('adapter');
-        console.log(rvalueptr, avaluesptr);
+        // console.log('adapter');
+        // console.log(rvalueptr, avaluesptr);
         let args = [];
         for (let a = 0; a < this.aereprs.length; a++) {
             let ereprs = this.aereprs[a];
@@ -383,29 +379,30 @@ export class CCallback {
                 let repr = ereprs[0];
                 let f = primitiveTypes[repr][2];
                 let p = readUintptrArray(avaluesptr, a);
-                console.log(repr, f, p, f(p));
+                // console.log(repr, f, p, f(p));
                 args[a] = repr == 'string' ? ffi.newstring(f(p)) : f(p);
             }
-            console.log(a, args[a])
+            // console.log(a, args[a])
         }
         let ret = this.jsfunc(...args);
-        console.log(ret)
+        // console.log(ret)
         this.cstr.free(); // free previous call
-        console.log(this.rereprs, typeof this.rereprs)
+        // console.log(this.rereprs, typeof this.rereprs)
         if (this.rereprs.length > 1) {
-            console.log('if')
+            // console.log('if')
             for (let e = 0; e < this.rereprs.length; e++) {
                 let repr = this.rereprs[e];
-                let f = primitiveTypes[repr][2];
+                let f = primitiveTypes[repr][3];
                 let p = rvalueptr + this.reoffsets[e];
+                // console.log(repr, f, p);
                 repr == 'string' ? f(p, this.cstr.to(ret[e])) : f(p, ret[e]);
             }
         } else {
-            console.log('else')
+            // console.log('else')
             let repr = this.rereprs[0];
             let f = primitiveTypes[repr][3];
             let p = rvalueptr;
-            console.log(repr, f, p);
+            // console.log(repr, f, p);
             repr == 'string' ? f(p, this.cstr.to(ret)) : f(p, ret);
         }
     }

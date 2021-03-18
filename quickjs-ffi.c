@@ -27,8 +27,8 @@ SOFTWARE.
 #include <ffi.h>
 #include <gnu/lib-names.h>
 #include <limits.h>
-#include <quickjs/quickjs.h>
 #include <quickjs/quickjs-libc.h>
+#include <quickjs/quickjs.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -536,6 +536,21 @@ static JSValue js_ffi_closure_free(JSContext *ctx, JSValueConst this_val, int ar
     return JS_UNDEFINED;
 }
 
+static JSValue js_ffi_prep_closure_loc(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    ffi_closure *closure;
+    ffi_cif *cif;
+    void *fun;
+    void *user_data;
+    void *codeloc;
+    CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number, t_number, t_number, t_number, t_number}))
+    JS_TO_UINTPTR_T(ctx, &closure, argv[0]);
+    JS_TO_UINTPTR_T(ctx, &cif, argv[1]);
+    JS_TO_UINTPTR_T(ctx, &fun, argv[2]);
+    JS_TO_UINTPTR_T(ctx, &user_data, argv[3]);
+    JS_TO_UINTPTR_T(ctx, &codeloc, argv[4]);
+    return JS_NEW_INT(ctx, ffi_prep_closure_loc(closure, cif, fun, user_data, codeloc));
+}
+
 typedef struct {
     JSContext *ctx;
     JSValue this;
@@ -549,35 +564,21 @@ static JSValue js_fill_ffi_closure_js_func_data(JSContext *ctx, JSValueConst thi
     data->ctx = ctx;
     data->this = this_val;
     data->func = argv[1];
-    puts("js_fill_ffi_closure_js_func_data");
-    printf("%lu %lu %lu %lu %lu\n", data->ctx, (data->func).u.ptr, (data->func).tag, (data->this).u.ptr, (data->this).tag);
-    // JS_Call(data->ctx, data->func, data->this, 0, 0);
+    // puts("js_fill_ffi_closure_js_func_data");
+    // printf("%lu %lu %lu %lu %lu\n", data->ctx, (data->func).u.ptr, (data->func).tag, (data->this).u.ptr, (data->this).tag);
     return JS_UNDEFINED;
 }
 
 static void ffi_closure_js_func_adapter(ffi_cif *cif, void *ret, void *args[], void *user_data) {
     ffi_closure_js_func_data *data = (ffi_closure_js_func_data *)user_data;
-    puts("ffi_closure_js_func_adapter");
-    printf("%lu %lu %lu %lu %lu\n", data->ctx, (data->func).u.ptr, (data->func).tag, (data->this).u.ptr, (data->this).tag);
-    printf("%lu %lu\n", ret, args);
-    JSValue result = JS_Call(data->ctx, data->func, data->this, 2, (JSValueConst[]){JS_NEW_UINTPTR_T(data->ctx, ret), JS_NEW_UINTPTR_T(data->ctx, args)});
-    // js_std_dump_error in quickjs-libc.c
-    if (JS_IsException(result)) {
+    // puts("ffi_closure_js_func_adapter");
+    // printf("%lu %lu %lu %lu %lu\n", data->ctx, (data->func).u.ptr, (data->func).tag, (data->this).u.ptr, (data->this).tag);
+    // printf("%lu %lu\n", ret, args);
+    JSValue result = JS_Call(data->ctx, data->func, data->this, 2,
+                             (JSValueConst[]){JS_NEW_UINTPTR_T(data->ctx, ret), JS_NEW_UINTPTR_T(data->ctx, args)});
+    if (JS_IsException(result)) {  // js_std_dump_error in quickjs-libc.c
         js_std_dump_error(data->ctx);
     }
-}
-
-static JSValue js_ffi_prep_closure_loc(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    ffi_closure *closure;
-    ffi_cif *cif;
-    void *user_data;
-    void *codeloc;
-    CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number, t_number, t_number, t_number}))
-    JS_TO_UINTPTR_T(ctx, &closure, argv[0]);
-    JS_TO_UINTPTR_T(ctx, &cif, argv[1]);
-    JS_TO_UINTPTR_T(ctx, &user_data, argv[2]);
-    JS_TO_UINTPTR_T(ctx, &codeloc, argv[3]);
-    return JS_NEW_INT(ctx, ffi_prep_closure_loc(closure, cif, ffi_closure_js_func_adapter, user_data, codeloc));
 }
 
 static JSCFunctionListEntry funcs[] = {
@@ -632,8 +633,7 @@ static JSCFunctionListEntry funcs[] = {
     JS_CFUNC_DEF("ffi_get_struct_offsets", 3, js_ffi_get_struct_offsets),
     JS_CFUNC_DEF("ffi_closure_alloc", 2, js_ffi_closure_alloc),
     JS_CFUNC_DEF("ffi_closure_free", 1, js_ffi_closure_free),
-    JS_CFUNC_DEF("fill_ffi_closure_js_func_data", 1, js_fill_ffi_closure_js_func_data),
-    JS_CFUNC_DEF("ffi_prep_closure_loc", 4, js_ffi_prep_closure_loc),
+    JS_CFUNC_DEF("ffi_prep_closure_loc", 5, js_ffi_prep_closure_loc),
     C_ENUM_DEF(FFI_OK),
     C_ENUM_DEF(FFI_BAD_TYPEDEF),
     C_ENUM_DEF(FFI_BAD_ABI),
@@ -645,7 +645,6 @@ static JSCFunctionListEntry funcs[] = {
     C_OFFSETOF_DEF(ffi_type, type),
     C_OFFSETOF_DEF(ffi_type, elements),
     C_SIZEOF_DEF(ffi_closure),
-    C_SIZEOF_DEF(ffi_closure_js_func_data),
 #ifndef LIBFFI_HIDE_BASIC_TYPES
     C_VAR_ADDRESS_DEF(ffi_type_void),
     C_VAR_ADDRESS_DEF(ffi_type_uint8),
@@ -678,6 +677,12 @@ static JSCFunctionListEntry funcs[] = {
     C_VAR_ADDRESS_DEF(ffi_type_size_t),
     C_MACRO_INT_DEF(FFI_TYPE_STRUCT),
     C_MACRO_INT_DEF(FFI_TYPE_COMPLEX),
+    //
+    // libffi closure custom things
+    //
+    JS_CFUNC_DEF("fill_ffi_closure_js_func_data", 1, js_fill_ffi_closure_js_func_data),
+    C_SIZEOF_DEF(ffi_closure_js_func_data),
+    C_VAR_ADDRESS_DEF(ffi_closure_js_func_adapter),
 #endif
 };
 

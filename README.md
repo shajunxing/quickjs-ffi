@@ -1,4 +1,4 @@
-# Libffi wrapper, Make QuickJS able to invoke almost any C libraries without writing C code
+# Libffi wrapper for QuickJS. Now supports almost every features of C including primitive types, structs, callbacks and so on
 
 ## License
 
@@ -33,9 +33,9 @@ SOFTWARE.
 
 ## Intruduction
 
-Although there's already one wrapper <https://github.com/partnernetsoftware/qjs-ffi> I found through duckduckgo, to be honest I'm not satisfied with this principle. My opinion is better to keep C code simple and stupid, and put complex logic into JS. Existing library functions, variables, macro definitions and all the things exposed should keep their original look as much as possible.
+Although there's already one wrapper <https://github.com/partnernetsoftware/qjs-ffi> I found through duckduckgo, to be honest I'm not satisfied with this design. My idea is to keep C code as simple as possible, and put complex logic into JS. Existing library functions, variables, macro definitions and all the things exposed should keep their original look as much as possible.
 
-So I wrote my own from scratch. My module has two layers, low layer is `quickjs-ffi.c`, compiled to `quickjs-ffi.so`, containing minimal necessary things from libc, libdl, libffi, and using it is almost the same as it was in C, high layer `quickjs-ffi.js`  makes low layer easy to use.
+So I wrote my own from scratch. My module has two layers, low layer is `quickjs-ffi.c`, compiled to `quickjs-ffi.so`, containing minimal necessary things from libc, libdl, libffi, and using it is almost the same as C, high layer `quickjs-ffi.js`  makes low layer easy to use.
 
 It's east to compile, just `make`, it will produce module `quickjs-ffi.so`, test lib `test-lib.so` and will run `test.js`.
 
@@ -46,8 +46,17 @@ It's east to compile, just `make`, it will produce module `quickjs-ffi.so`, test
 Assume 3 C functions (defined in `test-lib.c`):
 
     void test1();
-    double test2(float, double, const char *);
-    void test3(struct {long; double; struct {int; float} });
+    double test2(float a, double b, const char *c);
+    typedef struct {
+        int i;
+        float f;
+    } s1;
+    typedef struct {
+        long l;
+        double d;
+        s1 s;
+    } s2;
+    void test3(s2 s);
 
 They can be invoked in JS like this:
 
@@ -62,20 +71,11 @@ They can be invoked in JS like this:
     let test3 = new CFunction('test-lib.so', 'test3', 'void', ['long', 'double', ['int', 'float']]).invoke;
     console.log(test3([123456789, 3.141592654, 54321, 2.718281829]));
 
-Output is:
-
-    Hello
-    undefined
-    3.141593 2.718282 How do you do?
-    5.859874570012574
-    123456789 3.141593 54321 2.718282
-    undefined
-
 `CFunction`'s constructor definition is:
 
-`library name, function name, return value type representation, ...arguments type representation`.
+    library name, function name, return value type representation, ...arguments type representation
 
-Primitive types are representated by short string according to `libffi`'s type definition, I renamed some of it to more C friendly, and also added some, see `primitive_types` in `quickjs-ffi.js` for details. **Note:** All C pointers are `pointers`, they are actually memory addresses. but `char *` can be represented by `string`, and will automatically inbox/outbox with JS string, outbox is not safe and may cause pointer oob, do it at your own risk. C complex type is not yet supported.
+Primitive types are representated by short string literals according to `libffi`'s type definition, I renamed some of it to more C friendly, and also added some, see `primitive_types` in `quickjs-ffi.js` for details. **Note:** All C pointers are `pointers`, they are actually memory addresses. but `char *` can be represented by `string`, and will automatically inbox/outbox with JS string, outbox is not safe and may cause pointer oob, do it at your own risk. C complex type is not yet supported.
 
 Structure types are represented by array of prinitive types. Nested structures must be defined by nested array, but putting/getting element values must be flattened, which means all structure's primitive elements, in natural order, eg. 'depth first' order.
 
@@ -84,6 +84,45 @@ If function return value is structure type, it will return a flattened array.
 High layer caches `dlopen`, `dlsym` and `ffi_prep_cif` results, including corresponding memory allocations. Same library and function will only load once, and also will same function definitions, eg. same arguments and return value representation.
 
 Each `CFunction` instance shares dl and ffi cache, but keep it's own memory allocations for arguments and return value, this design is for possible multithread situation.
+
+Now C callbacks are fully supported by `CCallback` class, which will wrap a JS function using libffi closure mechanism, and returns a C function pointer which can be used as another C function's parameter. `CCallback`'s constructor is:
+
+    JS function, return value type representation, ...arguments type representation
+
+Return value and arguments definitions are the same as `CFunction`.
+
+For example, there are test4 definition in `test-lib.c`:
+
+    char *test4(s2 (*fn)(float, double, const char *)) {
+        puts("test4 begins");
+        s2 ret = fn(3.141592654, 2.718281829, "Hi there");
+        printf("callback returns %ld %f %d %f\n", ret.l, ret.d, ret.s.i, ret.s.f);
+        puts("test4 ends");
+        return "greetings";
+    }
+
+Define and execute a JS callback is:
+
+    import * as ffi from './quickjs-ffi.js'
+
+    let test4 = new ffi.CFunction('test-lib.so', 'test4', 'string', 'pointer');
+    let cb = new ffi.CCallback((a, b, c) => {
+        console.log('callback begins');
+        console.log('arguments are', a, b, c);
+        console.log('callback ends');
+        return [1, 2, 3, 4];
+    }, ['long', 'double', ['int', 'float']], 'float', 'double', 'string');
+    console.log('test4 returns', test4.invoke(cb.cfuncptr));
+
+Which will output:
+
+    test4 begins
+    callback begins
+    arguments are 3.1415927410125732 2.718281829 Hi there
+    callback ends
+    callback returns 1 2.000000 3 4.000000
+    test4 ends
+    test4 returns greetings
 
 ## Low layer
 
@@ -163,8 +202,12 @@ Functions in `libdl` and `libffi` are almost the same as it's C style:
 * `pointer dlsym(pointer handle, string symbol)`
 * `string/null dlerror()`
 * `number ffi_prep_cif(pointer cif, number abi, number nargs, pointer rtype, pointer atypes)`
-* `undefined ffi_call (pointer cif, pointer fn, pointer rvalue, pointer avalues)`
-* `number ffi_get_struct_offsets (number abi, pointer struct_type, pointer offsets)`
+* `number ffi_prep_cif_var(pointer cif, number abi, number nfixedargs, number ntotalargs, pointer rtype, pointer atypes)`
+* `undefined ffi_call(pointer cif, pointer fn, pointer rvalue, pointer avalues)`
+* `number ffi_get_struct_offsets(number abi, pointer struct_type, pointer offsets)`
+* `number ffi_closure_alloc(number, number)`
+* `undefined ffi_closure_free(number)`
+* `number ffi_prep_closure_loc(number, number, number, number, number)`
 
 And many necessary constant values or addresses such as `RTLD_XXX` `FFI_XXX` `ffi_type_xxx` are exposed.
 
