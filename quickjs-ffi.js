@@ -130,7 +130,7 @@ function allocUintptrArray(mem, ...vals) {
 }
 
 function readUintptrArray(buf, i) {
-    return ffi.memreadint(buf + ffi.sizeof_uintptr_t * i, ffi.sizeof_uintptr_t * i, 0, true, ffi.sizeof_uintptr_t * i);
+    return ffi.memreadint(buf + ffi.sizeof_uintptr_t * i, ffi.sizeof_uintptr_t, 0, true, ffi.sizeof_uintptr_t);
 }
 
 function allocStructType(mem, ...elems) {
@@ -332,9 +332,9 @@ export class CCallback {
     cstr = new CStringAllocator();
     cif;
     cfuncptr;
-    rvalue;
-    avalues;
-    avaluesptr;
+    // rvalue;
+    // avalues;
+    // avaluesptr;
     rereprs;
     aereprs;
     reoffsets;
@@ -364,8 +364,50 @@ export class CCallback {
             throw new TypeError('ffi_prep_closure_loc failed with return code ' + status);
         }
     }
-    adapter = () => {
-        console.log('foo');
+    adapter = (rvalueptr, avaluesptr) => {
+        console.log('adapter');
+        console.log(rvalueptr, avaluesptr);
+        let args = [];
+        for (let a = 0; a < this.aereprs.length; a++) {
+            let ereprs = this.aereprs[a];
+            if (ereprs.length > 1) {
+                let arg = [];
+                for (let e = 0; e < ereprs.length; e++) {
+                    let repr = ereprs[e];
+                    let f = primitiveTypes[repr][2];
+                    let p = readUintptrArray(avaluesptr, a) + this.aeoffsets[a][e];
+                    arg[e] = repr == 'string' ? ffi.newstring(f(p)) : f(p);
+                }
+                args[a] = arg;
+            } else {
+                let repr = ereprs[0];
+                let f = primitiveTypes[repr][2];
+                let p = readUintptrArray(avaluesptr, a);
+                console.log(repr, f, p, f(p));
+                args[a] = repr == 'string' ? ffi.newstring(f(p)) : f(p);
+            }
+            console.log(a, args[a])
+        }
+        let ret = this.jsfunc(...args);
+        console.log(ret)
+        this.cstr.free(); // free previous call
+        console.log(this.rereprs, typeof this.rereprs)
+        if (this.rereprs.length > 1) {
+            console.log('if')
+            for (let e = 0; e < this.rereprs.length; e++) {
+                let repr = this.rereprs[e];
+                let f = primitiveTypes[repr][2];
+                let p = rvalueptr + this.reoffsets[e];
+                repr == 'string' ? f(p, this.cstr.to(ret[e])) : f(p, ret[e]);
+            }
+        } else {
+            console.log('else')
+            let repr = this.rereprs[0];
+            let f = primitiveTypes[repr][3];
+            let p = rvalueptr;
+            console.log(repr, f, p);
+            repr == 'string' ? f(p, this.cstr.to(ret)) : f(p, ret);
+        }
     }
     free = () => {
         ffi.ffi_closure_free(this.closure);

@@ -28,6 +28,7 @@ SOFTWARE.
 #include <gnu/lib-names.h>
 #include <limits.h>
 #include <quickjs/quickjs.h>
+#include <quickjs/quickjs-libc.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -269,7 +270,8 @@ static JSValue js_memreadint(JSContext *ctx, JSValueConst this_val, int argc, JS
         case 4:
             return issigned ? JS_NewInt32(ctx, *((int32_t *)(buf + offset))) : JS_NewUint32(ctx, *((uint32_t *)(buf + offset)));
         case 8:
-            return issigned ? JS_NewInt64(ctx, *((int64_t *)(buf + offset))) : JS_NewBigUint64(ctx, *((uint64_t *)(buf + offset)));
+            // TODO: unsigned int64 ???
+            return issigned ? JS_NewInt64(ctx, *((int64_t *)(buf + offset))) : JS_NewInt64(ctx, *((uint64_t *)(buf + offset)));
         default:
             JS_ThrowTypeError(ctx, "bytewidth must only be 1, 2, 4, or 8");
             return JS_EXCEPTION;
@@ -547,15 +549,22 @@ static JSValue js_fill_ffi_closure_js_func_data(JSContext *ctx, JSValueConst thi
     data->ctx = ctx;
     data->this = this_val;
     data->func = argv[1];
+    puts("js_fill_ffi_closure_js_func_data");
     printf("%lu %lu %lu %lu %lu\n", data->ctx, (data->func).u.ptr, (data->func).tag, (data->this).u.ptr, (data->this).tag);
-    JS_Call(data->ctx, data->func, data->this, 0, 0);
+    // JS_Call(data->ctx, data->func, data->this, 0, 0);
     return JS_UNDEFINED;
 }
 
 static void ffi_closure_js_func_adapter(ffi_cif *cif, void *ret, void *args[], void *user_data) {
     ffi_closure_js_func_data *data = (ffi_closure_js_func_data *)user_data;
+    puts("ffi_closure_js_func_adapter");
     printf("%lu %lu %lu %lu %lu\n", data->ctx, (data->func).u.ptr, (data->func).tag, (data->this).u.ptr, (data->this).tag);
-    ret = JS_NEW_UINTPTR_T(ctx, JS_Call(data->ctx, data->func, data->this, 1, (JSValueConst[]){JS_NEW_UINTPTR_T(ctx, args)}));
+    printf("%lu %lu\n", ret, args);
+    JSValue result = JS_Call(data->ctx, data->func, data->this, 2, (JSValueConst[]){JS_NEW_UINTPTR_T(data->ctx, ret), JS_NEW_UINTPTR_T(data->ctx, args)});
+    // js_std_dump_error in quickjs-libc.c
+    if (JS_IsException(result)) {
+        js_std_dump_error(data->ctx);
+    }
 }
 
 static JSValue js_ffi_prep_closure_loc(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
