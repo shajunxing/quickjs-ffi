@@ -1,11 +1,10 @@
-import * as ffi from './quickjs-ffi.js'
-
-let test4 = new ffi.CFunction('test-lib.so', 'test4', 'string', 'pointer');
-let cb = new ffi.CCallback((a, b, c) => {
-    console.log('callback begins');
-    console.log('arguments are', a, b, c);
-    console.log('callback ends');
-    return [1, 2, 3, 4];
-}, ['long', 'double', ['int', 'float']], 'float', 'double', 'string');
-console.log('test4 returns', test4.invoke(cb.cfuncptr));
-
+import { CFunction, freeCif } from './quickjs-ffi.js'
+import { LIBC_SO } from './quickjs-ffi.so'
+let printf = new CFunction(LIBC_SO, 'printf', 1, 'int', 'string', 'double', 'double', 'int');
+printf.invoke('%g %g %d\n', 3.141592654, 2.718281829, 299792458);
+freeCif(printf.cifcacheindex);
+printf.free();
+printf = new CFunction(LIBC_SO, 'printf', 1, 'int', 'string', 'string', 'string');
+printf.invoke('%s %s\n', 'hello', 'world');
+freeCif(printf.cifcacheindex);
+printf.free();

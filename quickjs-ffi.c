@@ -344,6 +344,7 @@ static JSValue js_memwritefloat(JSContext *ctx, JSValueConst this_val, int argc,
     JS_TO_SIZE_T(ctx, &offset, argv[2]);
     isdouble = JS_ToBool(ctx, argv[3]);
     JS_ToFloat64(ctx, &val, argv[4]);
+    // printf("%f\n", val);
     if ((buflen < 0) || (offset < 0) || (offset + (isdouble ? sizeof(double) : sizeof(float)) > buflen)) {
         JS_ThrowRangeError(ctx, "pointer out of bounds");
         return JS_EXCEPTION;
@@ -488,7 +489,7 @@ static JSValue js_libffi_ffi_prep_cif_var(JSContext *ctx, JSValueConst this_val,
     JS_TO_UINTPTR_T(ctx, &cif, argv[0]);
     JS_TO_INT(ctx, &abi, argv[1]);
     JS_TO_INT(ctx, &nfixedargs, argv[2]);
-    JS_TO_INT(ctx, &ntotalargs, argv[2]);
+    JS_TO_INT(ctx, &ntotalargs, argv[3]);
     JS_TO_UINTPTR_T(ctx, &rtype, argv[4]);
     JS_TO_UINTPTR_T(ctx, &atypes, argv[5]);
     return JS_NEW_INT(ctx, ffi_prep_cif_var(cif, abi, nfixedargs, ntotalargs, rtype, atypes));

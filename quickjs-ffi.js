@@ -218,8 +218,21 @@ function parseType(mem, repr) {
 
 const cifCache = {};
 
-function prepCif(rrepr, ...areprs) {
-    let index = JSON.stringify([rrepr, [areprs]]);
+function getCifCacheIndex(nfixedargs, rrepr, ...areprs) {
+    return JSON.stringify([nfixedargs, rrepr, [areprs]]);
+}
+
+function prepCif(nfixedargs, rrepr, ...areprs) { // nfixedargs is null or number
+    if (typeof nfixedargs === 'number') {
+        if (nfixedargs > areprs.length) {
+            throw new TypeError('nfixedargs must <= areprs.length');
+        } else if (nfixedargs <= 0) {
+            throw new TypeError('nfixedargs must > 0');
+        }
+    } else if (nfixedargs !== null) {
+        throw new TypeError('nfixedargs must be null or number');
+    }
+    let index = getCifCacheIndex(nfixedargs, rrepr, ...areprs);
     if (cifCache.hasOwnProperty(index)) {
         return cifCache[index];
     }
@@ -230,18 +243,29 @@ function prepCif(rrepr, ...areprs) {
     let atypes = allocUintptrArray(mem, ...aparsed.map(parsed => parsed.typ));
     let rtype = rparsed.typ;
     let cif = mem.alloc(ffi.sizeof_ffi_cif);
-    let status = ffi.ffi_prep_cif(cif, ffi.FFI_DEFAULT_ABI, nargs, rtype, atypes);
+    let status = nfixedargs === null ?
+        ffi.ffi_prep_cif(cif, ffi.FFI_DEFAULT_ABI, nargs, rtype, atypes) :
+        ffi.ffi_prep_cif_var(cif, ffi.FFI_DEFAULT_ABI, nfixedargs, nargs, rtype, atypes);
     if (status != ffi.FFI_OK) {
         mem.free();
         throw new TypeError('ffi_prep_cif failed with return code ' + status);
     }
-    let cache = { mem: mem, cif: cif, rparsed: rparsed, aparsed: aparsed };
+    let cache = {
+        index: index,
+        mem: mem,
+        cif: cif,
+        rnbytes: rparsed.nbytes,
+        anbytes: aparsed.map(p => p.nbytes),
+        rereprs: rparsed.ereprs,
+        aereprs: aparsed.map(p => p.ereprs),
+        reoffsets: rparsed.eoffsets,
+        aeoffsets: aparsed.map(p => p.eoffsets),
+    };
     cifCache[index] = cache;
     return cache;
 }
 
-function freeCif(rrepr, ...areprs) {
-    let index = JSON.stringify([rrepr, [areprs]]);
+export function freeCif(index) {
     if (cifCache.hasOwnProperty(index)) {
         cifCache[index].mem.free();
         delete cifCache[index];
@@ -266,6 +290,7 @@ export class CFunction {
     mem = new MemoryAllocator();
     cstr = new CStringAllocator();
     cif;
+    cifcacheindex;
     cfuncptr;
     rvalue;
     avalues;
@@ -278,16 +303,18 @@ export class CFunction {
         this.cfuncptr = dlSym(filename, symbol);
         let c = prepCif(rrepr, ...areprs);
         this.cif = c.cif;
-        this.rvalue = this.mem.alloc(c.rparsed.nbytes);
-        this.avalues = c.aparsed.map(ap => this.mem.alloc(ap.nbytes));
+        this.cifcacheindex = c.index;
+        this.rvalue = this.mem.alloc(c.rnbytes);
+        this.avalues = c.anbytes.map(n => this.mem.alloc(n));
         this.avaluesptr = allocUintptrArray(this.mem, ...this.avalues);
-        this.rereprs = c.rparsed.ereprs;
-        this.aereprs = c.aparsed.map(ap => ap.ereprs);
-        this.reoffsets = c.rparsed.eoffsets;
-        this.aeoffsets = c.aparsed.map(ap => ap.eoffsets);
+        this.rereprs = c.rereprs;
+        this.aereprs = c.aereprs;
+        this.reoffsets = c.reoffsets;
+        this.aeoffsets = c.aeoffsets;
     }
     invoke = (...args) => {
         let writeArg = (a, e, val) => {
+            // console.log(a, e, val)
             let repr = this.aereprs[a][e];
             let f = primitiveTypes[repr][3];
             let p = this.avalues[a] + this.aeoffsets[a][e];
@@ -331,6 +358,7 @@ export class CCallback {
     mem = new MemoryAllocator();
     cstr = new CStringAllocator();
     cif;
+    cifcacheindex;
     cfuncptr;
     rereprs;
     aereprs;
@@ -346,10 +374,11 @@ export class CCallback {
         this.cfuncptr = ffi.memreadint(pp, ffi.sizeof_uintptr_t, 0, true, ffi.sizeof_uintptr_t);
         let c = prepCif(rrepr, ...areprs);
         this.cif = c.cif;
-        this.rereprs = c.rparsed.ereprs;
-        this.aereprs = c.aparsed.map(ap => ap.ereprs);
-        this.reoffsets = c.rparsed.eoffsets;
-        this.aeoffsets = c.aparsed.map(ap => ap.eoffsets);
+        this.cifcacheindex = c.index;
+        this.rereprs = c.rereprs;
+        this.aereprs = c.aereprs;
+        this.reoffsets = c.reoffsets;
+        this.aeoffsets = c.aeoffsets;
         this.userdata = this.mem.alloc(ffi.sizeof_ffi_closure_js_func_data);
         ffi.fill_ffi_closure_js_func_data(this.userdata, this.adapter);
         let status = ffi.ffi_prep_closure_loc(

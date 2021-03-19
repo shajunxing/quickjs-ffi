@@ -61,33 +61,45 @@ Assume 3 C functions (defined in `test-lib.c`):
 They can be invoked in JS like this:
 
     import { CFunction } from './quickjs-ffi.js'
-
-    let test1 = new CFunction('test-lib.so', 'test1', 'void').invoke;
-    console.log(test1());
-
-    let test2 = new CFunction('test-lib.so', 'test2', 'double', 'float', 'double', 'string').invoke;
-    console.log(test2(3.141592654, 2.718281829, 'How do you do?'));
-
-    let test3 = new CFunction('test-lib.so', 'test3', 'void', ['long', 'double', ['int', 'float']]).invoke;
-    console.log(test3([123456789, 3.141592654, 54321, 2.718281829]));
+    let test1 = new CFunction('test-lib.so', 'test1', null, 'void');
+    let test2 = new CFunction('test-lib.so', 'test2', null, 'double', 'float', 'double', 'string');
+    let test3 = new CFunction('test-lib.so', 'test3', null, 'void', ['long', 'double', ['int', 'float']]);
+    test1.invoke();
+    console.log(test2.invoke(3.141592654, 2.718281829, 'How do you do?'));
+    test3.invoke([123456789, 3.141592654, 54321, 2.718281829]);
 
 `CFunction`'s constructor definition is:
 
-    library name, function name, return value type representation, ...arguments type representation
+    library name, function name, nfixedargs, return value type representation, ...arguments type representation
 
-Primitive types are representated by short string literals according to `libffi`'s type definition, I renamed some of it to more C friendly, and also added some, see `primitive_types` in `quickjs-ffi.js` for details. **Note:** All C pointers are `pointers`, they are actually memory addresses. but `char *` can be represented by `string`, and will automatically inbox/outbox with JS string, outbox is not safe and may cause pointer oob, do it at your own risk. C complex type is not yet supported.
+If C function arguments length is fixed, `nfixedargs` must be null, or be the number of fixed arguments.
 
-Structure types are represented by array of prinitive types. Nested structures must be defined by nested array, but putting/getting element values must be flattened, which means all structure's primitive elements, in natural order, eg. 'depth first' order.
+Primitive types are representated by short string literals according to `libffi`'s type definition, I renamed some of it to more C friendly, and also added some, see `primitive_types` in `quickjs-ffi.js` for details. **Note:** All C pointers are `pointers`, they are actually memory addresses. but `char *` can be represented by `string`, and will automatically inbox/outbox with JS string, inbox is not safe and may cause pointer oob, you know that, so do it at your own risk. C complex type is not yet supported.
 
-If function return value is structure type, it will return a flattened array.
+Structure types are represented by array of primitive types. Nested structures must be defined by nested array, but putting/getting element values must be flattened, which means all structure's primitive elements, are in natural order, eg. 'depth first' order.
+
+If function's return value is structure type, it will returns a flattened array.
 
 High layer caches `dlopen`, `dlsym` and `ffi_prep_cif` results, including corresponding memory allocations. Same library and function will only load once, and also will same function definitions, eg. same arguments and return value representation.
 
 Each `CFunction` instance shares dl and ffi cache, but keep it's own memory allocations for arguments and return value, this design is for possible multithread situation.
 
-Now C callbacks are fully supported by `CCallback` class, which will wrap a JS function using libffi closure mechanism, and returns a C function pointer which can be used as another C function's parameter. `CCallback`'s constructor is:
+To invoke C functions with variadic arguments such as `printf`, if the function definition is fully dynamic, don't forget to free resources when no longer used. And **Cautions:** Be very carefully dealing with type promotions of C variadic function arguments. See C standards for details. Here is an example:
 
-    JS function, return value type representation, ...arguments type representation
+    import { CFunction, freeCif } from './quickjs-ffi.js'
+    import { LIBC_SO } from './quickjs-ffi.so'
+    let printf = new CFunction(LIBC_SO, 'printf', 1, 'int', 'string', 'double', 'double', 'int');
+    printf.invoke('%g %g %d\n', 3.141592654, 2.718281829, 299792458);
+    freeCif(printf.cifcacheindex);
+    printf.free();
+    printf = new CFunction(LIBC_SO, 'printf', 1, 'int', 'string', 'string', 'string');
+    printf.invoke('%s %s\n', 'hello', 'world');
+    freeCif(printf.cifcacheindex);
+    printf.free();
+
+C callbacks are fully supported by `CCallback` class, which will wrap a JS function using libffi closure mechanism, and returns a C function pointer which can be used as another C function's parameter. `CCallback`'s constructor is:
+
+    JS function, nfixedargs, return value type representation, ...arguments type representation
 
 Return value and arguments definitions are the same as `CFunction`.
 
@@ -104,14 +116,13 @@ For example, there are test4 definition in `test-lib.c`:
 Define and execute a JS callback is:
 
     import * as ffi from './quickjs-ffi.js'
-
-    let test4 = new ffi.CFunction('test-lib.so', 'test4', 'string', 'pointer');
+    let test4 = new ffi.CFunction('test-lib.so', 'test4', null, 'string', 'pointer');
     let cb = new ffi.CCallback((a, b, c) => {
         console.log('callback begins');
         console.log('arguments are', a, b, c);
         console.log('callback ends');
         return [1, 2, 3, 4];
-    }, ['long', 'double', ['int', 'float']], 'float', 'double', 'string');
+    }, null, ['long', 'double', ['int', 'float']], 'float', 'double', 'string');
     console.log('test4 returns', test4.invoke(cb.cfuncptr));
 
 Which will output:
