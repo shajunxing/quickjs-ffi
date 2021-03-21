@@ -26,10 +26,12 @@ SOFTWARE.
 
 ## Links
 
-* <https://bellard.org/quickjs/>
-* <https://github.com/bellard/quickjs>
-* <https://sourceware.org/libffi/>
-* <https://github.com/libffi/libffi>
+* quickjs-ffi <https://github.com/shajunxing/quickjs-ffi> *Any issues please report here*
+* quickjs-ffi <https://gitee.com/mirrors/quickjs-ffi> *Due to some well known reasons, here is China mirror*
+* quickjs <https://bellard.org/quickjs/>
+* quickjs <https://github.com/bellard/quickjs>
+* libffi <https://sourceware.org/libffi/>
+* libffi <https://github.com/libffi/libffi>
 
 ## Intruduction
 
