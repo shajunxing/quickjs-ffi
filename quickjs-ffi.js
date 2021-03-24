@@ -299,9 +299,9 @@ export class CFunction {
     aereprs;
     reoffsets;
     aeoffsets;
-    constructor(filename, symbol, rrepr, ...areprs) {
+    constructor(filename, symbol, ...args) {
         this.cfuncptr = dlSym(filename, symbol);
-        let c = prepCif(rrepr, ...areprs);
+        let c = prepCif(...args);
         this.cif = c.cif;
         this.cifcacheindex = c.index;
         this.rvalue = this.mem.alloc(c.rnbytes);
@@ -367,12 +367,12 @@ export class CCallback {
     closure;
     jsfunc;
     userdata;
-    constructor(jsfunc, rrepr, ...areprs) {
+    constructor(jsfunc, ...args) {
         this.jsfunc = jsfunc;
         let pp = this.mem.alloc(ffi.sizeof_uintptr_t);
         this.closure = ffi.ffi_closure_alloc(ffi.sizeof_ffi_closure, pp);
         this.cfuncptr = ffi.memreadint(pp, ffi.sizeof_uintptr_t, 0, true, ffi.sizeof_uintptr_t);
-        let c = prepCif(rrepr, ...areprs);
+        let c = prepCif(...args);
         this.cif = c.cif;
         this.cifcacheindex = c.index;
         this.rereprs = c.rereprs;
