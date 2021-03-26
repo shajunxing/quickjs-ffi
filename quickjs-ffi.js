@@ -129,8 +129,12 @@ function allocUintptrArray(mem, ...vals) {
     return buf;
 }
 
-function readUintptrArray(buf, i) {
+export function readUintptrArray(buf, i) {
     return ffi.memreadint(buf + ffi.sizeof_uintptr_t * i, ffi.sizeof_uintptr_t, 0, true, ffi.sizeof_uintptr_t);
+}
+
+export function readUintptr(buf) {
+    return ffi.memreadint(buf, ffi.sizeof_uintptr_t, 0, true, ffi.sizeof_uintptr_t);
 }
 
 function allocStructType(mem, ...elems) {
