@@ -28,6 +28,7 @@ SOFTWARE.
 
 * quickjs-ffi <https://github.com/shajunxing/quickjs-ffi> *Any issues please report here*
 * quickjs-ffi <https://gitee.com/mirrors/quickjs-ffi> *Due to some well known reasons, here is China mirror*
+* quickjs-misc <https://github.com/shajunxing/quickjs-misc> *My miscellaneous modules which can be seen as examples*
 * quickjs <https://bellard.org/quickjs/>
 * quickjs <https://github.com/bellard/quickjs>
 * libffi <https://sourceware.org/libffi/>
@@ -159,12 +160,13 @@ The module exposes many constant values, which varies by C or machine implementa
 
 I will do my best checking function arguments, including their count and types, although I know it's not enough.
 
-C needs lots of memory operations, so I exposed necessary libc functions such as `malloc`, `free`, `memset` and `memcpy`:
+C needs lots of memory operations, so I exposed necessary libc functions as below:
 
 * `pointer malloc(number size)`
 * `undefined free(pointer ptr)`
 * `pointer memset(pointer s, number c, number n)`
 * `pointer memcpy(pointer dest, pointer src, number n)`
+* `number strlen(pointer s)`
 
 And I added my own functions below. Also I will check out-of-bound error in them, yet still not enough, so do it at your own risk.
 
@@ -355,6 +357,8 @@ In libffi document there are detailed instructions on how to pass C structures. 
 
 ## Examples
 
+### More examples visit <https://github.com/shajunxing/quickjs-misc>
+
 ### JS version of <https://curl.se/libcurl/c/simple.html>
 
     import { CFunction } from 'quickjs-ffi.js'
@@ -382,5 +386,3 @@ In libffi document there are detailed instructions on how to pass C structures. 
         }
         curl_easy_cleanup(curl);
     }
-
-### More examples visit <https://github.com/shajunxing/quickjs-misc>

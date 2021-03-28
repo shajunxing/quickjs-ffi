@@ -163,6 +163,15 @@ static JSValue js_libc_malloc(JSContext *ctx, JSValueConst this_val, int argc, J
     return JS_NEW_UINTPTR_T(ctx, malloc(size));
 }
 
+static JSValue js_libc_realloc(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    void *ptr;
+    size_t size;
+    CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number, t_number}))
+    JS_TO_UINTPTR_T(ctx, &ptr, argv[0]);
+    JS_TO_SIZE_T(ctx, &size, argv[1]);
+    return JS_NEW_UINTPTR_T(ctx, realloc(ptr, size));
+}
+
 static JSValue js_libc_free(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     void *ptr;
     CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number}))
@@ -191,6 +200,13 @@ static JSValue js_libc_memcpy(JSContext *ctx, JSValueConst this_val, int argc, J
     JS_TO_UINTPTR_T(ctx, &src, argv[1]);
     JS_TO_SIZE_T(ctx, &n, argv[2]);
     return JS_NEW_UINTPTR_T(ctx, memcpy(dest, src, n));
+}
+
+static JSValue js_libc_strlen(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    char *s;
+    CHECK_ARGS(ctx, argc, argv, ((enum argtype[]){t_number}))
+    JS_TO_UINTPTR_T(ctx, &s, argv[0]);
+    return JS_NEW_SIZE_T(ctx, strlen(s));
 }
 
 static void fprinthex(FILE *stream, const void *data, size_t size) {
@@ -587,9 +603,11 @@ static JSCFunctionListEntry funcs[] = {
     // basic memory handling functions, partly from libc and quickjs itself
     //
     JS_CFUNC_DEF("malloc", 1, js_libc_malloc),
+    JS_CFUNC_DEF("realloc", 2, js_libc_realloc),
     JS_CFUNC_DEF("free", 1, js_libc_free),
     JS_CFUNC_DEF("memset", 3, js_libc_memset),
     JS_CFUNC_DEF("memcpy", 3, js_libc_memcpy),
+    JS_CFUNC_DEF("strlen", 1, js_libc_strlen),
     JS_CFUNC_DEF("fprinthex", 3, js_fprinthex),
     JS_CFUNC_DEF("printhex", 2, js_printhex),
     JS_CFUNC_DEF("memreadint", 5, js_memreadint),
@@ -687,7 +705,30 @@ static JSCFunctionListEntry funcs[] = {
 #endif
 };
 
+// static void js_dtor_class_finalizer(JSRuntime *rt, JSValue obj) {
+//     JSObject *p = JS_VALUE_GET_OBJ(obj);
+//     JSContext *ctx = p->u.cfunc.realm;
+//     if (ctx) {
+//         JSValue dtor = JS_GetPropertyStr(ctx, obj, "destructor");
+//         if (JS_IsFunction(ctx, dtor)) {
+//             JSValue result = JS_Call(ctx, dtor, obj, 0, NULL);
+//             if (JS_IsException(result)) {  // js_std_dump_error in quickjs-libc.c
+//                 js_std_dump_error(ctx);
+//             }
+//         }
+//     }
+// }
+
+// static JSClassDef js_dtor_class = {
+//     "ClassWithDestructor",
+//     .finalizer = js_dtor_class_finalizer,
+// };
+
+// static JSClassID js_dtor_class_id;
+
 static int init(JSContext *ctx, JSModuleDef *m) {
+    // JS_NewClassID(&js_dtor_class_id);
+    // JS_NewClass(JS_GetRuntime(ctx), js_dtor_class_id, &js_dtor_class);
     JS_SetModuleExportList(ctx, m, funcs, COUNTOF(funcs));
     // stdin stdout stderr cannot be added in the list above, compiler error:
     // "initializer element is not constant ... in expansion of macro ..."
