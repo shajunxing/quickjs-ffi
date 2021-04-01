@@ -209,8 +209,7 @@ static JSValue js_libc_strlen(JSContext *ctx, JSValueConst this_val, int argc, J
     return JS_NEW_SIZE_T(ctx, strlen(s));
 }
 
-static void fprinthex(FILE *stream, const void *data, size_t size) {
-    // https://gist.github.com/ccbrown/9722406
+static void fprinthex(FILE *stream, const void *data, size_t size) { // https://gist.github.com/ccbrown/9722406
     char ascii[17];
     size_t i, j;
     ascii[16] = '\0';

@@ -178,9 +178,9 @@ And I added my own functions below. Also I will check out-of-bound error in them
 * `undefined memwritefloat(pointer buf, number buflen, number offset, bool isdouble, double val)` <br>write float/double `val` to `offset`.
 * `string memreadstring(pointer buf, number buflen, number offset, number len)` <br>read `len` bytes from `offset`, returns JS string.
 * `undefined memwritestring(pointer buf, number buflen, number offset, string str)` <br>write `str` to `offset`.
-* `pointer tocstring(string str)` <br>`JS_ToCString()` wrapper of `JS_ToCString()`.
-* `undevined freecstring(pointer cstr)` <br>`JS_FreeCString()` wrapper of `JS_FreeCString()`.
-* `string newstring(pointer cstr)` <br>`JS_ToCString()` wrapper of `JS_NewString()`. **Unsafe!**
+* `pointer tocstring(string str)` <br>wrapper of `JS_ToCString()`.
+* `undefined freecstring(pointer cstr)` <br>wrapper of `JS_FreeCString()`.
+* `string newstring(pointer cstr)` <br>wrapper of `JS_NewString()`. **Unsafe!**
 
 Here is an example:
 

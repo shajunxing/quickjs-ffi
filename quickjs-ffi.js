@@ -48,7 +48,7 @@ function dlSym(filename, symbol) {
     // console.log(filename, symbol);
     let pointer = ffi.dlsym(file.handle, symbol);
     if (pointer === 0) {
-        throw new TypeError(dlerror());
+        throw new TypeError(ffi.dlerror());
     }
     file.symbols[symbol] = pointer;
     return pointer;
@@ -155,8 +155,7 @@ function getStructOffsets(struct_typ, elem_count) {
     }
     let offsets = []
     for (let i = 0; i < elem_count; i++) {
-        // convert BigInt to Number to prevent TypeError
-        offsets.push(Number(ffi.memreadint(ptr, ffi.sizeof_size_t * 100, ffi.sizeof_size_t * i, false, ffi.sizeof_size_t)))
+        offsets.push(ffi.memreadint(ptr, ffi.sizeof_size_t * elem_count, ffi.sizeof_size_t * i, false, ffi.sizeof_size_t))
     }
     ffi.free(ptr);
     return offsets;
@@ -226,7 +225,7 @@ function getCifCacheIndex(nfixedargs, rrepr, ...areprs) {
     return JSON.stringify([nfixedargs, rrepr, [areprs]]);
 }
 
-function prepCif(nfixedargs, rrepr, ...areprs) { // nfixedargs is null or number
+function prepCif(nfixedargs, rrepr, ...areprs) {
     if (typeof nfixedargs === 'number') {
         if (nfixedargs > areprs.length) {
             throw new TypeError('nfixedargs must <= areprs.length');
