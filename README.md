@@ -42,10 +42,6 @@ So I wrote my own from scratch. My module has two layers, low layer is `quickjs-
 
 It's east to compile, just `make`, it will produce module `quickjs-ffi.so`, test lib `test-lib.so` and will run `test.js`.
 
-## High layer
-
-**Now it's quite a lot simplified**, although I can still only promise to keep low layer unchanged, but not high layer.
-
 Assume 3 C functions (defined in `test-lib.c`):
 
     void test1();
@@ -77,7 +73,7 @@ They can be invoked in JS like this:
 
 If C function arguments length is fixed, `nfixedargs` must be null, or be the number of fixed arguments.
 
-Primitive types are representated by short string literals according to `libffi`'s type definition, I renamed some of it to more C friendly, and also added some, see `primitive_types` in `quickjs-ffi.js` for details. **Note:** All C pointers are `pointers`, they are actually memory addresses. but `char *` can be represented by `string`, and will automatically inbox/outbox with JS string, inbox is not safe and may cause pointer oob, you know that, so do it at your own risk. C complex type is not yet supported.
+Primitive types are representated by short string literals according to `libffi`'s type definition, I added more C friendly ones, see `primitiveTypes` in `quickjs-ffi.js` for details. **Note:** All C pointers are `pointers`, they are actually memory addresses. but `char *` can be represented by `string`, and will automatically inbox/outbox with JS string, inbox is not safe and may cause pointer oob, you know that, so do it at your own risk. C complex type is not yet implemented.
 
 Structure types are represented by array of primitive types. Nested structures must be defined by nested array, but putting/getting element values must be flattened, which means all structure's primitive elements, are in natural order, eg. 'depth first' order.
 
